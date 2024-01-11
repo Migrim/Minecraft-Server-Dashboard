@@ -1,0 +1,96 @@
+body {
+    background-color: #222222;
+    color: white;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.dashboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr; 
+    grid-template-rows: auto auto;
+    gap: 20px;
+    width: 90%;
+    margin-top: 20px;
+}
+.server-controls {
+    animation: fadeInScaleUp 0.5s ease-out forwards;
+    margin-top: 30px;
+    grid-row: 1;
+    background-color: #333333;
+    padding: 20px;
+    border-radius: 20px;
+    height: 300px; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; /
+}
+.file-explorer {
+    animation: fadeInScaleUp 0.5s ease-out forwards;
+    grid-row: 2;
+    background-color: #333333;
+    padding: 20px;
+    border-radius: 20px;
+    height: 300px; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.console {
+    animation: fadeInScaleUp 0.5s ease-out forwards;
+    margin-top: 30px;
+    grid-row: 1 / span 2; 
+    grid-column: 2;
+    background-color: #333333;
+    padding: 20px;
+    border-radius: 20px;
+    min-height: 620px; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.server-controls button {
+    background-color: #5555ff;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 20px;
+    margin: 10px;
+    cursor: pointer;
+    font-size: 1em;
+}
+.server-controls button:hover {
+    background-color: #7777ff;
+}
+.title {
+    font-size: 1.5em;
+    margin-bottom: 20px;
+    text-align: center;
+}
+.server-info {
+    background-color: #292828;
+    color: #fff; 
+    border-radius: 10px; 
+    padding: 10px 20px; 
+    display: inline-block; 
+    margin: 10px 0; 
+    font-family: Arial, sans-serif;
+    font-size: 0.9em; 
+    width: auto; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+@keyframes fadeInScaleUp {
+    0% {
+        transform: scale(0.95);
+    }
+    100% {
+        transform: scale(1);
+    }
+}

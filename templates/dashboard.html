@@ -43,13 +43,46 @@
             document.getElementById('start-server').addEventListener('click', () => {
                 fetch('/start');
                 document.getElementById('start-animation-modal').style.display = 'block';
-                setTimeout(() => {
-                    document.getElementById('start-animation-modal').style.display = 'none';
-                }, 5000);
             });
 
             document.getElementById('stop-server').addEventListener('click', () => {
-                fetch('/stop');
+                fetch('/stop')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log(data.message);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert("Error stopping the server: " + error); 
+                    });
+            });
+
+            function checkPlayers() {
+                const playerListContainer = document.getElementById('player-list-container');
+                const noPlayersModal = document.getElementById('no-players-modal');
+
+                if (playerListContainer.children.length === 0) {
+                    noPlayersModal.style.display = 'flex'; // Show modal when no players
+                } else {
+                    noPlayersModal.style.display = 'none'; // Hide
+                }
+            }
+
+            window.onload = function() {
+                checkPlayers();
+                    SetInterval(checkPlayers, 5000); 
+            };
+
+            document.addEventListener("DOMContentLoaded", function() {
+                setTimeout(function() {
+                    var modal = document.getElementById('start-animation-modal');
+                    modal.classList.add('fade-out');
+                }, 5000);
             });
 
             document.getElementById('download-server').addEventListener('click', () => {
@@ -124,6 +157,16 @@
                 document.getElementById('console-input').value = '';
             });
 
+            function checkForServerReady() {
+                let consoleOutput = document.getElementById('console-output').innerText;
+                if (consoleOutput.includes("[Server thread/INFO]: Done")) {
+                    document.getElementById('start-animation-modal').style.display = 'none';
+                    clearInterval(checkServerInterval); 
+                }
+            }
+
+            let checkServerInterval = setInterval(checkForServerReady, 1000);
+
             function createPlayerActionModal(playerName, event) {
                 let existingModal = document.getElementById('player-action-modal');
                 if (existingModal) existingModal.remove();
@@ -138,7 +181,7 @@
                 modalContent.style.top = event.clientY + 'px';
                 modalContent.style.left = event.clientX + 'px';
 
-                let actions = ['Kick', 'Ban', 'OP', 'Kill', 'Pardon', 'Deop'];
+                let actions = ['Kick', 'Ban', 'OP', 'Kill', 'Pardon', 'DeOP'];
                 actions.forEach(action => {
                     let button = document.createElement('button');
                     button.textContent = `${action} ${playerName}`;
@@ -162,6 +205,31 @@
 
                 modal.style.display = 'block';
             }
+
+            function updateServerStatusDot() {
+                fetch('/server-status')
+                    .then(response => response.json())
+                    .then(data => {
+                        const statusDot = document.getElementById('server-status-dot');
+                        const startButton = document.getElementById('start-server');
+                        const stopButton = document.getElementById('stop-server');
+
+                        if (data.running) {
+                            statusDot.classList.remove('stopped');
+                            statusDot.classList.add('running');
+                            startButton.disabled = true;  
+                            stopButton.disabled = false; 
+                        } else {
+                            statusDot.classList.remove('running');
+                            statusDot.classList.add('stopped');
+                            startButton.disabled = false; 
+                            stopButton.disabled = true; 
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+            }
+
+            setInterval(updateServerStatusDot, 100);
 
             function hideModal() {
                 var modals = document.getElementsByClassName('modal');
@@ -202,6 +270,8 @@
                                 createPlayerActionModal(player, event);
                             });
                         });
+
+                        checkPlayers(); 
                     })
                     .catch(error => console.error('Error:', error));
             }
@@ -211,6 +281,20 @@
     </script>
 </head>
 <body>
+    <div id="status-bar" class="status-bar">
+        <div class="status-bar-buttons">
+            <button id="start-server">
+                <i class="material-icons">play_arrow</i>
+                Start Server
+            </button>
+            <button id="stop-server">
+                <i class="material-icons">stop</i> 
+                Stop Server
+            </button>
+        </div>
+        <div id="server-status-dot" class="server-status-dot stopped"></div>
+    </div>    
+    
     <div class="dashboard">
         <div class="console">
             <div class="title">Console</div>
@@ -221,28 +305,15 @@
             </div>
         </div>        
         <div class="server-controls">
-            <div class="left-panel">
-                <div class="controls">
-                    <button id="start-server">
-                        <i class="material-icons">play_arrow</i>
-                        Start Server
-                    </button>
-                    <button id="stop-server">
-                        <i class="material-icons">stop</i> 
-                        Stop Server
-                    </button>
-                </div>
-                <div class="server-info">
-                    <p>Uptime: 12 days, 4 hours, 36 minutes</p>
-                    <p>Server Time: 14:52 PM</p>
-                </div>
-            </div>
-            <div class="right-panel">
+            <div class="player-panel">
                 <div class="player-list" id="player-list-container">
 
-                </div>                
-            </div>
-        </div>        
+                </div>
+                <div class="no-players-modal" id="no-players-modal">
+                    <span class="no-players-text">No active players :3</span>
+                </div>
+            </div>            
+        </div>             
         <div class="file-explorer">
             <div class="title">File Explorer View</div>
             <button id="download-server">Download Minecraft Server</button>
@@ -255,9 +326,9 @@
         <div class="starting-modal-content">
             <img src="https://media.tenor.com/2l4-h42qnmcAAAAi/toothless-dancing-toothless.gif" alt="Toothless Dancing" id="modal-gif">
             <div class="loader"></div>
-            <p>Starting the Server...</p>
+            <p id="loading-text">Starting the Server</p>
         </div>
-    </div>
+    </div>    
 
 </body>
 </html>

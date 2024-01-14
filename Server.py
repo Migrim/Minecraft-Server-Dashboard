@@ -8,6 +8,7 @@ import re
 import sys
 import time
 import requests
+import json
 
 app = Flask(__name__, instance_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance'), instance_relative_config=True)
 app.config['SECRET_KEY'] = 'geheim!'
@@ -15,6 +16,7 @@ socketio = SocketIO(app)
 
 console_output = []
 players = set()
+server_running_status = False
 
 jar_path = 'instance/server-files' 
 server_files_dir = os.path.join(app.instance_path, 'server-files')
@@ -60,8 +62,21 @@ def download_minecraft_server():
 def dashboard():
     return render_template('dashboard.html')
 
+def save_server_status(status):
+    status_path = os.path.join(app.instance_path, 'server_status.json')
+    with open(status_path, 'w') as f:
+        json.dump({'server_running': status}, f)
+
+def read_server_status():
+    status_path = os.path.join(app.instance_path, 'server_status.json')
+    if os.path.exists(status_path):
+        with open(status_path, 'r') as f:
+            return json.load(f).get('server_running', False)
+    return False
+
 def start_server():
     global server_process
+    save_server_status(True)
     jar_path = os.path.join(server_files_dir, 'minecraft_server.jar')
 
     if not os.path.isfile(jar_path):
@@ -219,11 +234,9 @@ def accept_eula():
         print(f"Fehler: {e}")
         return "Ein Fehler ist aufgetreten."
 
-@app.route('/stop')
-def stop_minecraft_server():
+def stop_server_async():
     global server_process
     if server_process is not None and server_process.stdin:
-        print("Starting countdown for server shutdown.")
         try:
             server_process.stdin.write('/say The server will shutdown in 10 seconds\n')
             server_process.stdin.flush()
@@ -236,16 +249,27 @@ def stop_minecraft_server():
 
             server_process.stdin.write('stop\n')
             server_process.stdin.flush()
-            server_process.communicate(timeout=10)
+            server_process.wait()  
         except Exception as e:
             print(f"Error during server shutdown: {e}")
-            return jsonify({"error": str(e)}), 500
         finally:
             server_process = None
-        return "Minecraft Server gestoppt."
+
+@app.route('/stop')
+def stop_minecraft_server():
+    global server_process
+    save_server_status(False)
+    if server_process is not None and server_process.stdin:
+        print("Starting countdown for server shutdown.")
+        Thread(target=stop_server_async).start() 
+        return jsonify({"message": "Minecraft Server shutdown initiated."})
     else:
-        print("Minecraft Server läuft nicht, kann nicht gestoppt werden.")
-        return "Minecraft Server läuft nicht."
+        print("Minecraft Server is not running.")
+        return jsonify({"error": "Minecraft Server is not running."}), 400
+
+@app.route('/server-status')
+def server_status():
+    return jsonify({'running': read_server_status()})
 
 if __name__ == '__main__':
     socketio.run(app, debug=False, port=7440, host='0.0.0.0')

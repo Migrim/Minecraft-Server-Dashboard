@@ -6,6 +6,7 @@ import threading
 import os
 import re
 import sys
+import time
 import requests
 
 app = Flask(__name__, instance_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance'), instance_relative_config=True)
@@ -100,7 +101,66 @@ def send_command():
     except Exception as e:
         print(f"Error sending command: {e}")
         return jsonify({"error": str(e)}), 500
-    
+
+def send_server_command(command):
+    """
+    Sends a command to the Minecraft server's console.
+
+    Parameters:
+    command (str): The command to send to the Minecraft server.
+
+    Returns:
+    json: A JSON response indicating the status of the command.
+    """
+    global server_process, console_output
+    try:
+        if server_process and server_process.stdin and not server_process.poll():
+            command_with_newline = f'{command}\n'
+            print(f"Sending command to server: {command.strip()}")
+            server_process.stdin.write(command_with_newline)
+            server_process.stdin.flush()
+            console_output.append(f"Command: {command.strip()}")
+            return jsonify({"status": "Command sent", "command": command.strip()})
+        else:
+            print("Server not running or input stream closed")
+            return jsonify({"error": "Server not running or input stream closed"}), 400
+    except Exception as e:
+        print(f"Error sending command: {e}")
+        console_output.append(f"Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/ban', methods=['POST'])
+def ban_player():
+    player = request.json['player']
+    reason = request.json.get('reason', 'Banned by an operator.')
+    return send_server_command(f'ban {player} {reason}')
+
+@app.route('/kick', methods=['POST'])
+def kick_player():
+    player = request.json['player']
+    reason = request.json.get('reason', 'Kicked by an operator.')
+    return send_server_command(f'kick {player} {reason}')
+
+@app.route('/kill', methods=['POST'])
+def kill_player():
+    player = request.json['player']
+    return send_server_command(f'kill {player}')
+
+@app.route('/op', methods=['POST'])
+def op_player():
+    player = request.json['player']
+    return send_server_command(f'op {player}')
+
+@app.route('/pardon', methods=['POST'])
+def pardon_player():
+    player = request.json['player']
+    return send_server_command(f'pardon {player}')
+
+@app.route('/deop', methods=['POST'])
+def deop_player():
+    player = request.json['player']
+    return send_server_command(f'deop {player}')
+
 @app.route('/start')
 def start_minecraft_server():
     thread = Thread(target=start_server)
@@ -110,9 +170,12 @@ def start_minecraft_server():
 def emit_server_output(process):
     global console_output, players
     for line in iter(process.stdout.readline, ''):
-        print(f"Console Output: {line}")  
-        console_output.append(line)
-        socketio.emit('server_output', {'data': line})
+
+        line_display = line.replace('<', 'ඞ').replace('>', 'ඞ')
+
+        print(f"Console Output: {line_display}")  
+        console_output.append(line_display)
+        socketio.emit('server_output', {'data': line_display})
         
         join_match = re.search(r"\[Server thread/INFO\]: (\w+) joined the game", line)
         if join_match:
@@ -159,10 +222,26 @@ def accept_eula():
 @app.route('/stop')
 def stop_minecraft_server():
     global server_process
-    if server_process is not None:
-        print("Stoppe den Minecraft-Server.")
-        server_process.terminate()
-        server_process = None
+    if server_process is not None and server_process.stdin:
+        print("Starting countdown for server shutdown.")
+        try:
+            server_process.stdin.write('/say The server will shutdown in 10 seconds\n')
+            server_process.stdin.flush()
+            time.sleep(7) 
+
+            for remaining in range(3, 0, -1):
+                server_process.stdin.write(f'/say Stopping server in {remaining} \n')
+                server_process.stdin.flush()
+                time.sleep(1)
+
+            server_process.stdin.write('stop\n')
+            server_process.stdin.flush()
+            server_process.communicate(timeout=10)
+        except Exception as e:
+            print(f"Error during server shutdown: {e}")
+            return jsonify({"error": str(e)}), 500
+        finally:
+            server_process = None
         return "Minecraft Server gestoppt."
     else:
         print("Minecraft Server läuft nicht, kann nicht gestoppt werden.")

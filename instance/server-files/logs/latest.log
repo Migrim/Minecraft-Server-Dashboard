@@ -1,0 +1,37 @@
+[20:49:04] [main/WARN]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[20:49:04] [main/WARN]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[20:49:04] [main/WARN]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[20:49:04] [main/WARN]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[20:49:04] [main/WARN]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[20:49:04] [Server thread/INFO]: Starting minecraft server version 1.14
+[20:49:04] [Server thread/INFO]: Loading properties
+[20:49:04] [Server thread/INFO]: Default game type: SURVIVAL
+[20:49:04] [Server thread/INFO]: Generating keypair
+[20:49:04] [Server thread/INFO]: Starting Minecraft server on *:25565
+[20:49:04] [Server thread/INFO]: Using default channel type
+[20:49:04] [Server thread/INFO]: Preparing level "world"
+[20:49:04] [Server thread/INFO]: Reloading ResourceManager: Default
+[20:49:06] [Server thread/INFO]: Loaded 6 recipes
+[20:49:07] [Server thread/INFO]: Loaded 811 advancements
+[20:49:07] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
+[20:49:09] [Server-Worker-7/INFO]: Preparing spawn area: 0%
+[20:49:09] [Server-Worker-4/INFO]: Preparing spawn area: 0%
+[20:49:09] [Server-Worker-7/INFO]: Preparing spawn area: 0%
+[20:49:09] [Server-Worker-7/INFO]: Preparing spawn area: 0%
+[20:49:09] [Server-Worker-3/INFO]: Preparing spawn area: 0%
+[20:49:09] [Server-Worker-7/INFO]: Preparing spawn area: 72%
+[20:49:10] [Server thread/INFO]: Time elapsed: 2645 ms
+[20:49:10] [Server thread/INFO]: Done (5.170s)! For help, type "help"
+[20:50:24] [User Authenticator #1/INFO]: UUID of player Siloxxx is e524e15a-dab4-4fab-b2a3-55aea0efffc3
+[20:50:24] [Server thread/INFO]: Siloxxx[/192.168.0.89:50336] logged in with entity id 195 at (12.388941059547385, 67.0, 304.8869956577201)
+[20:50:25] [Server thread/INFO]: Siloxxx joined the game
+[20:50:36] [Server thread/INFO]: Made Siloxxx no longer a server operator
+[20:50:40] [Server thread/INFO]: Made Siloxxx a server operator
+[20:50:42] [Server thread/INFO]: Banned Siloxxx: Banned by an operator.
+[20:50:42] [Server thread/INFO]: Siloxxx lost connection: Disconnected
+[20:50:42] [Server thread/INFO]: Siloxxx left the game
+[20:50:42] [Server thread/WARN]: handleDisconnection() called twice
+[20:50:46] [Server thread/INFO]: Unbanned Siloxxx
+[20:50:55] [User Authenticator #2/INFO]: UUID of player Siloxxx is e524e15a-dab4-4fab-b2a3-55aea0efffc3
+[20:50:55] [Server thread/INFO]: Siloxxx[/192.168.0.89:50358] logged in with entity id 279 at (-20.060552996274268, 65.0, 264.9484714642996)
+[20:50:55] [Server thread/INFO]: Siloxxx joined the game

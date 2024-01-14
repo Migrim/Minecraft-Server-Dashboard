@@ -15,22 +15,37 @@
                     .then(response => response.json())
                     .then(data => {
                         let consoleOutput = document.getElementById('console-output');
-                        consoleOutput.innerHTML = data.map(line => {
+                        consoleOutput.innerHTML = data.map((line, index) => {
+                            let spanClass = "";
                             if (line.includes("WARN")) {
-                                return `<span class="warn">${line}</span>`;
-                            } else {
-                                return line;
+                                spanClass = "warn";
+                            } else if (line.includes("ERROR")) {
+                                spanClass = "error";
+                            } else if (line.includes("advancement") && line.includes("[Server thread/INFO]") && !line.match(/ඞ.*?ඞ/)) {
+                                spanClass = "green";
+                            } else if (line.includes("completed the challenge") && line.includes("[Server thread/INFO]") && !line.match(/ඞ.*?ඞ/)) {
+                                spanClass = "purple";
+                            } else if (line.includes("reached the goal") && line.includes("[Server thread/INFO]") && !line.match(/ඞ.*?ඞ/)) {
+                                spanClass = "yellow";
                             }
+
+                            let additionalClass = index === data.length - 1 ? "latest" : "";
+
+                            return `<span class="console-output-typing ${spanClass} ${additionalClass}">${line}</span>`;
                         }).join('<br>');
                         consoleOutput.scrollTop = consoleOutput.scrollHeight;
                     })
                     .catch(error => console.error('Error:', error));
-            };
+            }
 
             setInterval(updateConsoleOutput, 250);
 
             document.getElementById('start-server').addEventListener('click', () => {
                 fetch('/start');
+                document.getElementById('start-animation-modal').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('start-animation-modal').style.display = 'none';
+                }, 5000);
             });
 
             document.getElementById('stop-server').addEventListener('click', () => {
@@ -65,6 +80,32 @@
                     .catch(error => console.error('Error:', error));
             });
 
+            const sendCommand = () => {
+                var command = document.getElementById('console-input').value;
+                console.log("Command sent:", command);
+
+                fetch('/send-command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({command: command})
+                })
+                .then(response => response.json())
+                .then(data => console.log(data))
+                .catch(error => console.error('Error:', error));
+
+                document.getElementById('console-input').value = '';
+            };
+
+            document.getElementById('send-command').addEventListener('click', sendCommand);
+
+            document.getElementById('console-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendCommand();
+                }
+            });
+
             document.getElementById('send-command').addEventListener('click', () => {
                 var command = document.getElementById('console-input').value;
                 console.log("Command sent:", command);
@@ -83,72 +124,88 @@
                 document.getElementById('console-input').value = '';
             });
 
-            function createContextMenu(playerName) {
-                let existingMenu = document.getElementById('context-menu');
-                if (existingMenu) existingMenu.remove();
+            function createPlayerActionModal(playerName, event) {
+                let existingModal = document.getElementById('player-action-modal');
+                if (existingModal) existingModal.remove();
 
-                let menu = document.createElement('ul');
-                menu.id = 'context-menu';
-                menu.classList.add('context-menu');
+                let modal = document.createElement('div');
+                modal.id = 'player-action-modal';
+                modal.className = 'modal';
 
+                let modalContent = document.createElement('div');
+                modalContent.className = 'modal-content';
 
-                let kickItem = document.createElement('li');
-                kickItem.textContent = 'Kick ' + playerName;
-                kickItem.onclick = function() { console.log('Kick ' + playerName); }; 
-                let banItem = document.createElement('li');
-                banItem.textContent = 'Ban ' + playerName;
-                banItem.onclick = function() { console.log('Ban ' + playerName); }; 
-                let killItem = document.createElement('li');
-                killItem.textContent = 'Kill ' + playerName;
-                killItem.onclick = function() { console.log('Kill ' + playerName); }; 
+                modalContent.style.top = event.clientY + 'px';
+                modalContent.style.left = event.clientX + 'px';
 
-                menu.appendChild(kickItem);
-                menu.appendChild(banItem);
-                menu.appendChild(killItem);
+                let actions = ['Kick', 'Ban', 'OP', 'Kill', 'Pardon', 'Deop'];
+                actions.forEach(action => {
+                    let button = document.createElement('button');
+                    button.textContent = `${action} ${playerName}`;
+                    button.onclick = function() {
+                        fetch(`/${action.toLowerCase()}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ player: playerName })
+                        })
+                        .then(response => response.json())
+                        .then(data => console.log(data))
+                        .catch(error => console.error('Error:', error));
+                    };
+                    modalContent.appendChild(button);
+                });
 
-                document.body.appendChild(menu);
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
 
-                return menu;
+                modal.style.display = 'block';
             }
 
-            function showContextMenu(menu, x, y) {
-                menu.style.left = x + 'px';
-                menu.style.top = y + 'px';
-                menu.style.display = 'block';
+            function hideModal() {
+                var modals = document.getElementsByClassName('modal');
+                for (var i = 0; i < modals.length; i++) {
+                    modals[i].style.display = 'none';
+                }
+            }
+
+            window.onclick = function(event) {
+                if (event.target.className === 'modal') {
+                    hideModal();
+                }
             }
 
             function updatePlayerList() {
                 fetch('/get-players')
                     .then(response => response.json())
                     .then(playerList => {
-                        let playerListElement = document.getElementById('player-list');
-                        playerListElement.innerHTML = ''; 
+                        let playerListContainer = document.getElementById('player-list-container');
+                        playerListContainer.innerHTML = '';
                         playerList.forEach(player => {
-                            let listItem = document.createElement('li');
+                            let playerContainer = document.createElement('div');
+                            let playerNameSpan = document.createElement('span');
+                            let iconSpan = document.createElement('span');
 
-                            let textNode = document.createTextNode(player + ' ');
-                            listItem.appendChild(textNode);
+                            playerContainer.classList.add('player-container');
+                            playerNameSpan.textContent = player;
+                            iconSpan.innerHTML = '<i class="material-icons">expand_more</i>'; 
 
-                            let icon = document.createElement('i');
-                            icon.className = 'material-icons';
-                            icon.textContent = 'keyboard_arrow_down';
-                            listItem.appendChild(icon);
+                            playerContainer.appendChild(playerNameSpan);
+                            playerContainer.appendChild(iconSpan);
 
-                            playerListElement.appendChild(listItem);
-                            icon.onclick = function(event) {
-                                console.log("Icon clicked for player: " + player);
-                                let menu = createContextMenu(player);
-                                showContextMenu(menu, event.pageX, event.pageY);
-                                event.stopPropagation();
-                            };
+                            playerListContainer.appendChild(playerContainer);
+
+                            playerContainer.addEventListener('click', (event) => { 
+                                event.preventDefault(); 
+                                console.log("Player container clicked for player: " + player);
+                                createPlayerActionModal(player, event);
+                            });
                         });
                     })
                     .catch(error => console.error('Error:', error));
             }
-            document.addEventListener('click', function() {
-                let existingMenu = document.getElementById('context-menu');
-                if (existingMenu) existingMenu.style.display = 'none';
-            });
+
             setInterval(updatePlayerList, 1000); 
         });
     </script>
@@ -181,12 +238,9 @@
                 </div>
             </div>
             <div class="right-panel">
-                <div class="player-list">
-                    <div class="title">Player List</div>
-                    <ul id="player-list">
+                <div class="player-list" id="player-list-container">
 
-                    </ul>
-                </div>
+                </div>                
             </div>
         </div>        
         <div class="file-explorer">
@@ -196,5 +250,14 @@
             <p>File list...</p>
         </div>
     </div>
+
+    <div class="starting-modal" id="start-animation-modal">
+        <div class="starting-modal-content">
+            <img src="https://media.tenor.com/2l4-h42qnmcAAAAi/toothless-dancing-toothless.gif" alt="Toothless Dancing" id="modal-gif">
+            <div class="loader"></div>
+            <p>Starting the Server...</p>
+        </div>
+    </div>
+
 </body>
 </html>

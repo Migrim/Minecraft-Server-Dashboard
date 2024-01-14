@@ -3,26 +3,196 @@
 <head>
     <title>Minecraft Server Dashboard</title>
     <link rel="stylesheet" type="text/css" href="static/css/dashboard.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', () => {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+            const updateConsoleOutput = () => {
+                fetch('/get-console-output')
+                    .then(response => response.json())
+                    .then(data => {
+                        let consoleOutput = document.getElementById('console-output');
+                        consoleOutput.innerHTML = data.map(line => {
+                            if (line.includes("WARN")) {
+                                return `<span class="warn">${line}</span>`;
+                            } else {
+                                return line;
+                            }
+                        }).join('<br>');
+                        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                    })
+                    .catch(error => console.error('Error:', error));
+            };
+
+            setInterval(updateConsoleOutput, 250);
+
+            document.getElementById('start-server').addEventListener('click', () => {
+                fetch('/start');
+            });
+
+            document.getElementById('stop-server').addEventListener('click', () => {
+                fetch('/stop');
+            });
+
+            document.getElementById('download-server').addEventListener('click', () => {
+                fetch('/download-server')
+                    .then(response => {
+                        if (response.ok) {
+                            return response.blob();
+                        }
+                        throw new Error('Network response was not ok.');
+                    })
+                    .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = 'minecraft_server.jar';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    })
+                    .catch(error => console.error('Error:', error));
+            });
+
+            document.getElementById('accept-eula').addEventListener('click', () => {
+                fetch('/accept-eula', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(data => alert(data))
+                    .catch(error => console.error('Error:', error));
+            });
+
+            document.getElementById('send-command').addEventListener('click', () => {
+                var command = document.getElementById('console-input').value;
+                console.log("Command sent:", command);
+
+                fetch('/send-command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({command: command})
+                })
+                .then(response => response.json())
+                .then(data => console.log(data))
+                .catch(error => console.error('Error:', error));
+
+                document.getElementById('console-input').value = '';
+            });
+
+            function createContextMenu(playerName) {
+                let existingMenu = document.getElementById('context-menu');
+                if (existingMenu) existingMenu.remove();
+
+                let menu = document.createElement('ul');
+                menu.id = 'context-menu';
+                menu.classList.add('context-menu');
+
+
+                let kickItem = document.createElement('li');
+                kickItem.textContent = 'Kick ' + playerName;
+                kickItem.onclick = function() { console.log('Kick ' + playerName); }; 
+                let banItem = document.createElement('li');
+                banItem.textContent = 'Ban ' + playerName;
+                banItem.onclick = function() { console.log('Ban ' + playerName); }; 
+                let killItem = document.createElement('li');
+                killItem.textContent = 'Kill ' + playerName;
+                killItem.onclick = function() { console.log('Kill ' + playerName); }; 
+
+                menu.appendChild(kickItem);
+                menu.appendChild(banItem);
+                menu.appendChild(killItem);
+
+                document.body.appendChild(menu);
+
+                return menu;
+            }
+
+            function showContextMenu(menu, x, y) {
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+                menu.style.display = 'block';
+            }
+
+            function updatePlayerList() {
+                fetch('/get-players')
+                    .then(response => response.json())
+                    .then(playerList => {
+                        let playerListElement = document.getElementById('player-list');
+                        playerListElement.innerHTML = ''; 
+                        playerList.forEach(player => {
+                            let listItem = document.createElement('li');
+
+                            let textNode = document.createTextNode(player + ' ');
+                            listItem.appendChild(textNode);
+
+                            let icon = document.createElement('i');
+                            icon.className = 'material-icons';
+                            icon.textContent = 'keyboard_arrow_down';
+                            listItem.appendChild(icon);
+
+                            playerListElement.appendChild(listItem);
+                            icon.onclick = function(event) {
+                                console.log("Icon clicked for player: " + player);
+                                let menu = createContextMenu(player);
+                                showContextMenu(menu, event.pageX, event.pageY);
+                                event.stopPropagation();
+                            };
+                        });
+                    })
+                    .catch(error => console.error('Error:', error));
+            }
+            document.addEventListener('click', function() {
+                let existingMenu = document.getElementById('context-menu');
+                if (existingMenu) existingMenu.style.display = 'none';
+            });
+            setInterval(updatePlayerList, 1000); 
+        });
+    </script>
 </head>
 <body>
     <div class="dashboard">
         <div class="console">
             <div class="title">Console</div>
-            <!-- Console content goes here -->
-            <p>Console output...</p>
-        </div>
+            <div id="console-output" class="console-output"></div> 
+            <div class="console-input-container"> 
+                <input type="text" id="console-input" placeholder="Enter command..." />
+                <button id="send-command">Send</button>
+            </div>
+        </div>        
         <div class="server-controls">
-            <div class="title">Start and Stop Server</div>
-            <button>Start Server</button>
-            <button>Stop Server</button>
-            <div class="server-info">
-                <p>Uptime: 12 days, 4 hours, 36 minutes</p>
-                <p>Server Time: 14:52 PM</p>
+            <div class="left-panel">
+                <div class="controls">
+                    <button id="start-server">
+                        <i class="material-icons">play_arrow</i>
+                        Start Server
+                    </button>
+                    <button id="stop-server">
+                        <i class="material-icons">stop</i> 
+                        Stop Server
+                    </button>
+                </div>
+                <div class="server-info">
+                    <p>Uptime: 12 days, 4 hours, 36 minutes</p>
+                    <p>Server Time: 14:52 PM</p>
+                </div>
+            </div>
+            <div class="right-panel">
+                <div class="player-list">
+                    <div class="title">Player List</div>
+                    <ul id="player-list">
+
+                    </ul>
+                </div>
             </div>
         </div>        
         <div class="file-explorer">
             <div class="title">File Explorer View</div>
-            <!-- File Explorer content goes here -->
+            <button id="download-server">Download Minecraft Server</button>
+            <button id="accept-eula">Accept EULA</button>
             <p>File list...</p>
         </div>
     </div>

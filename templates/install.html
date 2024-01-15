@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Server Install</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        form {
+            margin: 20px;
+        }
+        label, select {
+            margin-right: 10px;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/get-server-json')
+                .then(response => response.json())
+                .then(data => {
+                    const typeSelect = document.getElementById('type');
+
+                    data.types.forEach(type => {
+                        let option = document.createElement('option');
+                        option.value = type;
+                        option.textContent = type;
+                        typeSelect.appendChild(option);
+                    });
+
+                })
+                .catch(error => console.error('Error:', error));
+        });
+    </script>
+</head>
+<body>
+    <form action="/download-server" method="get">
+        <label for="type">Server Type:</label>
+        <select name="type" id="type">
+            {% for type in server_options.types %}
+                <option value="{{ type }}">{{ type }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="version">Server Version:</label>
+        <select name="version" id="version"></select>
+        <input type="submit" value="Download Server">
+    </form>
+</body>
+</html>

@@ -29,17 +29,71 @@ server_process = subprocess.Popen(
     cwd=server_files_dir
 )
 
+@app.route('/get-server-options')
+def get_server_options():
+    try:
+        types_response = requests.get('https://serverjars.com/api/fetchTypes')
+        types_response.raise_for_status()
+        types_data = types_response.json()
+
+        print("Types Data:", types_data)  
+
+        combined_data = {
+            "types": types_data.get('response', []),
+        }
+
+        filepath = os.path.join(app.instance_path, 'server_options.json')
+        with open(filepath, 'w') as json_file:
+            json.dump(combined_data, json_file, indent=4)
+
+        return jsonify(combined_data)
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": "Failed to fetch server options."})
+
+@app.route('/get-server-json')
+def get_server_json():
+    try:
+        filepath = os.path.join(app.instance_path, 'server_options.json')
+        with open(filepath, 'r') as json_file:
+            server_options = json.load(json_file)
+        return jsonify(server_options)
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": "Failed to read server options from file."})
+
+@app.route('/install')
+def install():
+    try:
+        filepath = os.path.join(app.instance_path, 'server_options.json')
+        with open(filepath, 'r') as json_file:
+            server_options = json.load(json_file)
+            return render_template('install.html', server_options=server_options)
+    except Exception as e:
+        print(f"Error: {e}")
+        return "An error occurred while loading server options."
+
 @app.route('/download-server')
 def download_minecraft_server():
     try:
+        version = request.args.get('version', 'latest')  
+        server_type = request.args.get('type', 'paper') 
+
         minecraft_server_path = os.path.join(app.instance_path, server_files_dir, 'minecraft_server.jar')
         os.makedirs(os.path.dirname(minecraft_server_path), exist_ok=True)
-        print(f"Verzeichnis erstellt oder existiert bereits: {os.path.dirname(minecraft_server_path)}")
 
-        url = "https://launcher.mojang.com/v1/objects/f1a0073671057f01aa843443fef34330281333ce/server.jar"
-        print(f"Starte Download von: {url}")
+        url = f"https://serverjars.com/api/fetchJar/{server_type}/{version}"
+        print(f"Starting download from: {url}")
 
-        with requests.get(url, stream=True) as r:
+        response = requests.get(url)
+        response.raise_for_status()
+        download_url = response.json().get('download')  
+
+        if not download_url:
+            return "Unable to fetch server download URL."
+
+        with requests.get(download_url, stream=True) as r:
             r.raise_for_status()
             total_size = int(r.headers.get('content-length', 0))
             block_size = 1024
@@ -49,14 +103,14 @@ def download_minecraft_server():
                     progress += len(data)
                     f.write(data)
                     done = int(50 * progress / total_size)
-                    print(f"\rDownload Fortschritt: [{'#' * done}{'.' * (50-done)}] {progress * 100 / total_size:.2f}%", end='')
+                    print(f"\rDownload Progress: [{'#' * done}{'.' * (50-done)}] {progress * 100 / total_size:.2f}%", end='')
 
-        print("\nDownload abgeschlossen.")
+        print("\nDownload completed.")
         return send_from_directory(directory=os.path.dirname(minecraft_server_path), path='minecraft_server.jar', as_attachment=True)
 
     except Exception as e:
-        print(f"Fehler: {e}")
-        return "Ein Fehler ist aufgetreten."
+        print(f"Error: {e}")
+        return "An error occurred."
 
 @app.route('/')
 def dashboard():

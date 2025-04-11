@@ -15,38 +15,89 @@
         label, select {
             margin-right: 10px;
         }
+        select {
+            background-color: #1e1e1e;
+            color: white;
+            border: 1px solid #333;
+            padding: 5px;
+        }
+        input[type="submit"] {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #444;
+        }
     </style>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            fetch('/get-server-json')
-                .then(response => response.json())
-                .then(data => {
-                    const typeSelect = document.getElementById('type');
-
-                    data.types.forEach(type => {
-                        let option = document.createElement('option');
-                        option.value = type;
-                        option.textContent = type;
-                        typeSelect.appendChild(option);
-                    });
-
-                })
-                .catch(error => console.error('Error:', error));
-        });
-    </script>
 </head>
 <body>
     <form action="/download-server" method="get">
         <label for="type">Server Type:</label>
         <select name="type" id="type">
-            {% for type in server_options.types %}
-                <option value="{{ type }}">{{ type }}</option>
-            {% endfor %}
+            <option value="">Select a type</option>
         </select>
 
-        <label for="version">Server Version:</label>
-        <select name="version" id="version"></select>
+        <label for="version">Version:</label>
+        <select name="version" id="version">
+            <option value="">Select a version</option>
+        </select>
+
         <input type="submit" value="Download Server">
     </form>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const typeSelect = document.getElementById('type');
+            const versionSelect = document.getElementById('version');
+
+            fetch('/get-server-json')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.types || !Array.isArray(data.types)) {
+                        console.error('Invalid format from server:', data);
+                        return;
+                    }
+
+                    data.types.forEach(entry => {
+                        const option = document.createElement('option');
+                        option.value = `${entry.category}:${entry.type}`;
+                        option.textContent = `${entry.category} - ${entry.type}`;
+                        typeSelect.appendChild(option);
+                    });
+
+                    typeSelect.addEventListener('change', function () {
+                        const [category, type] = this.value.split(':');
+                        versionSelect.innerHTML = '<option value="">Loading...</option>';
+
+                        fetch(`/get-versions?category=${category}&type=${type}`)
+                            .then(response => response.json())
+                            .then(versions => {
+                                versionSelect.innerHTML = '';
+                                if (Array.isArray(versions)) {
+                                    console.log("Loaded versions:", versions);  // 👈 Add this
+                                    versions.forEach(version => {
+                                        const opt = document.createElement('option');
+                                        opt.value = version;
+                                        opt.textContent = version;
+                                        versionSelect.appendChild(opt);
+                                    });
+                                } else {
+                                    versionSelect.innerHTML = '<option value="">No versions found</option>';
+                                }
+                            })
+                            .catch(error => {
+                                console.error("Error fetching versions:", error);
+                                versionSelect.innerHTML = '<option value="">Error loading versions</option>';
+                            });
+                    });
+                })
+                .catch(error => {
+                    console.error('Failed to load types:', error);
+                });
+        });
+    </script>
 </body>
 </html>

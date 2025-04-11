@@ -21,37 +21,60 @@ server_running_status = False
 jar_path = 'instance/server-files' 
 server_files_dir = os.path.join(app.instance_path, 'server-files')
 jar_file_path = os.path.join(app.instance_path, server_files_dir, 'minecraft_server.jar')
-server_process = subprocess.Popen(
-    ["java", "-Xmx1024M", "-Xms1024M", "-jar", jar_path, "nogui"],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    cwd=server_files_dir
-)
+server_process = None
 
 @app.route('/get-server-options')
 def get_server_options():
     try:
-        types_response = requests.get('https://serverjars.com/api/fetchTypes')
-        types_response.raise_for_status()
-        types_data = types_response.json()
+        response = requests.get("https://centrojars.com/api/fetchJar/fetchAllTypes.php")
+        response.raise_for_status()
+        raw_data = response.json()
 
-        print("Types Data:", types_data)  
+        types_by_category = raw_data.get("response", {})
 
-        combined_data = {
-            "types": types_data.get('response', []),
+        flattened_types = []
+        for category, types in types_by_category.items():
+            for t in types:
+                flattened_types.append({"category": category, "type": t})
+
+        final_data = {
+            "types": flattened_types
         }
 
         filepath = os.path.join(app.instance_path, 'server_options.json')
         with open(filepath, 'w') as json_file:
-            json.dump(combined_data, json_file, indent=4)
+            json.dump(final_data, json_file, indent=4)
 
-        return jsonify(combined_data)
+        return jsonify(final_data)
 
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"error": "Failed to fetch server options."})
+    
+@app.route('/get-versions')
+def get_versions():
+    category = request.args.get('category')
+    type_ = request.args.get('type')
+    if not category or not type_:
+        return jsonify({"error": "Missing category or type"}), 400
+    try:
+        url = f"https://centrojars.com/api/fetchJar/{category}/{type_}/fetchAllDetails.php"
+        print("Fetching versions from:", url)
 
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        files = data.get("response", {}).get("files", [])
+        versions = [file.get("version") for file in files if "version" in file]
+
+        print("Parsed versions:", versions)
+        return jsonify(versions)
+
+    except Exception as e:
+        print(f"Version fetch error: {e}")
+        return jsonify({"error": "Failed to fetch versions."}), 500
+    
 @app.route('/get-server-json')
 def get_server_json():
     try:
@@ -65,33 +88,38 @@ def get_server_json():
 
 @app.route('/install')
 def install():
+    filepath = os.path.join(app.instance_path, 'server_options.json')
+
+    if not os.path.isfile(filepath):
+        return "Server options file is missing. Please visit /get-server-options first."
+
     try:
-        filepath = os.path.join(app.instance_path, 'server_options.json')
         with open(filepath, 'r') as json_file:
             server_options = json.load(json_file)
-            return render_template('install.html', server_options=server_options)
+
+        # Directly pass the already flattened list
+        return render_template('install.html', server_options=server_options)
+
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error loading JSON: {e}")
         return "An error occurred while loading server options."
 
 @app.route('/download-server')
 def download_minecraft_server():
     try:
-        version = request.args.get('version', 'latest')  
-        server_type = request.args.get('type', 'paper') 
+        type_param = request.args.get('type')
+        version = request.args.get('version')
+
+        if not type_param or not version:
+            return "Missing type or version parameters.", 400
+
+        category, server_type = type_param.split(':')
+
+        download_url = f"https://centrojars.com/api/fetchJar/{server_type}/{category}/{version}"
+        print(f"Directly downloading from: {download_url}")
 
         minecraft_server_path = os.path.join(app.instance_path, server_files_dir, 'minecraft_server.jar')
         os.makedirs(os.path.dirname(minecraft_server_path), exist_ok=True)
-
-        url = f"https://serverjars.com/api/fetchJar/{server_type}/{version}"
-        print(f"Starting download from: {url}")
-
-        response = requests.get(url)
-        response.raise_for_status()
-        download_url = response.json().get('download')  
-
-        if not download_url:
-            return "Unable to fetch server download URL."
 
         with requests.get(download_url, stream=True) as r:
             r.raise_for_status()
@@ -103,15 +131,15 @@ def download_minecraft_server():
                     progress += len(data)
                     f.write(data)
                     done = int(50 * progress / total_size)
-                    print(f"\rDownload Progress: [{'#' * done}{'.' * (50-done)}] {progress * 100 / total_size:.2f}%", end='')
+                    print(f"\rDownload Progress: [{'#' * done}{'.' * (50 - done)}] {progress * 100 / total_size:.2f}%", end='')
 
         print("\nDownload completed.")
         return send_from_directory(directory=os.path.dirname(minecraft_server_path), path='minecraft_server.jar', as_attachment=True)
 
     except Exception as e:
         print(f"Error: {e}")
-        return "An error occurred."
-
+        return "An error occurred.", 500
+    
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html')

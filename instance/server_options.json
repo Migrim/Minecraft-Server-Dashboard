@@ -1,3 +1,40 @@
 {
-    "types": []
+    "types": [
+        {
+            "category": "bedrock",
+            "type": "pocketmine"
+        },
+        {
+            "category": "modded",
+            "type": "fabric"
+        },
+        {
+            "category": "modded",
+            "type": "forge"
+        },
+        {
+            "category": "proxies",
+            "type": "bungeecord"
+        },
+        {
+            "category": "proxies",
+            "type": "waterfall"
+        },
+        {
+            "category": "servers",
+            "type": "paper"
+        },
+        {
+            "category": "servers",
+            "type": "purpur"
+        },
+        {
+            "category": "servers",
+            "type": "spigot"
+        },
+        {
+            "category": "vanilla",
+            "type": "vanilla"
+        }
+    ]
 }

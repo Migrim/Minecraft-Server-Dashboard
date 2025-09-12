@@ -1,334 +1,347 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Minecraft Server Dashboard</title>
-    <link rel="stylesheet" type="text/css" href="static/css/dashboard.css">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
-    <script type="text/javascript">
-        document.addEventListener('DOMContentLoaded', () => {
-            var socket = io.connect('http://' + document.domain + ':' + location.port);
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minecraft Server Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+<style>
+:root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:#4f46e5;--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22;--scroll-track:#0b0b0d;--scroll-thumb:#2a2a33;--scroll-thumb-hover:#3a3a44}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f,transparent),linear-gradient(#0a0a0a,#0a0a0a);color:var(--text);font-family:Roboto,system-ui,Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px}
+p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
+.card{width:min(1100px,96vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
+.header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.header h1{margin:0;font-size:22px;letter-spacing:.2px}
+.header-right{display:flex;align-items:center;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
+.badge b{color:#fff}
+.dot{width:10px;height:10px;border-radius:999px;background:#444;border:1px solid #2a2a2e}
+.dot.running{background:#22c55e}
+.dot.stopped{background:#ef4444}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
+.btn:hover{background:#191a20}
+.btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn.ghost{background:transparent}
+.toolbar{padding:0 24px 16px;display:flex;gap:10px;flex-wrap:wrap}
+.grid{padding:0 24px 24px;display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media (max-width:1000px){.grid{grid-template-columns:1fr}}
+.panel{border:1px solid var(--border);border-radius:14px;background:#0e0e11}
+.panel .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600}
+.console-wrap{display:flex;flex-direction:column;height:520px}
+.console-output{flex:1;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.45;overflow:auto;white-space:pre-wrap;word-break:break-word;background:#0b0b0d}
+.console-output .warn{color:#fbbf24}
+.console-output .error{color:#ef4444}
+.console-output .green{color:#22c55e}
+.console-output .purple{color:#a78bfa}
+.console-output .yellow{color:#facc15}
+.console-inputbar{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}
+.input{flex:1;border:1px solid var(--border);background:#111114;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+.side{display:flex;flex-direction:column;gap:16px}
+.section{border:1px solid var(--border);border-radius:14px;background:#0e0e11}
+.section .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600}
+.players{max-height:250px;overflow:auto}
+.player{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #141418}
+.player:last-child{border-bottom:none}
+.player .name{font-size:14px}
+.filebox{padding:14px}
+.filebox .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.kit{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:#cbd5e1}
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:40}
+.modal .content{width:min(420px,92vw);background:#0f0f10;border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.actions{display:flex;gap:8px;justify-content:flex-end}
+.toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
+.toast{min-width:280px;max-width:96vw;background:#111114;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(16px);opacity:0;animation:toast-in .18s ease forwards}
+.toast.ok{border-color:#1f3f28}
+.toast.err{border-color:#3a1f22}
+.toast .t-content{flex:1}
+.toast .t-title{font-weight:600;margin:0 0 2px}
+.toast .t-msg{font-size:13px;color:#cbd5e1}
+.toast .t-actions{display:flex;gap:8px;margin-left:8px}
+.toast .t-btn{border:1px solid var(--border);background:#151518;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer}
+@keyframes toast-in{to{transform:translateY(0);opacity:1}}
+@keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+.starting{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:45}
+.starting .box{background:#0f0f10;border:1px solid var(--border);border-radius:14px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.loader{width:28px;height:28px;border:3px solid #2a2a33;border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-            const updateConsoleOutput = () => {
-                fetch('/get-console-output')
-                    .then(response => response.json())
-                    .then(data => {
-                        let consoleOutput = document.getElementById('console-output');
-                        consoleOutput.innerHTML = data.map((line, index) => {
-                            let spanClass = "";
-                            if (line.includes("WARN")) {
-                                spanClass = "warn";
-                            } else if (line.includes("ERROR")) {
-                                spanClass = "error";
-                            } else if (line.includes("advancement") && line.includes("[Server thread/INFO]") && !line.match(/ඞ.*?ඞ/)) {
-                                spanClass = "green";
-                            } else if (line.includes("completed the challenge") && line.includes("[Server thread/INFO]") && !line.match(/ඞ.*?ඞ/)) {
-                                spanClass = "purple";
-                            } else if (line.includes("reached the goal") && line.includes("[Server thread/INFO]") && !line.match(/ඞ.*?ඞ/)) {
-                                spanClass = "yellow";
-                            }
-
-                            let additionalClass = index === data.length - 1 ? "latest" : "";
-
-                            return `<span class="console-output-typing ${spanClass} ${additionalClass}">${line}</span>`;
-                        }).join('<br>');
-                        consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                    })
-                    .catch(error => console.error('Error:', error));
-            }
-
-            setInterval(updateConsoleOutput, 250);
-
-            document.getElementById('start-server').addEventListener('click', () => {
-                fetch('/start');
-                document.getElementById('start-animation-modal').style.display = 'block';
-            });
-
-            document.getElementById('stop-server').addEventListener('click', () => {
-                fetch('/stop')
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Network response was not ok');
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        console.log(data.message);
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert("Error stopping the server: " + error); 
-                    });
-            });
-
-            function checkPlayers() {
-                const playerListContainer = document.getElementById('player-list-container');
-                const noPlayersModal = document.getElementById('no-players-modal');
-
-                if (playerListContainer.children.length === 0) {
-                    noPlayersModal.style.display = 'flex'; // Show modal when no players
-                } else {
-                    noPlayersModal.style.display = 'none'; // Hide
-                }
-            }
-
-            window.onload = function() {
-                checkPlayers();
-                    SetInterval(checkPlayers, 5000); 
-            };
-
-            document.addEventListener("DOMContentLoaded", function() {
-                setTimeout(function() {
-                    var modal = document.getElementById('start-animation-modal');
-                    modal.classList.add('fade-out');
-                }, 5000);
-            });
-
-            document.getElementById('download-server').addEventListener('click', () => {
-                fetch('/download-server')
-                    .then(response => {
-                        if (response.ok) {
-                            return response.blob();
-                        }
-                        throw new Error('Network response was not ok.');
-                    })
-                    .then(blob => {
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.style.display = 'none';
-                        a.href = url;
-                        a.download = 'minecraft_server.jar';
-                        document.body.appendChild(a);
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                    })
-                    .catch(error => console.error('Error:', error));
-            });
-
-            document.getElementById('accept-eula').addEventListener('click', () => {
-                fetch('/accept-eula', { method: 'POST' })
-                    .then(response => response.text())
-                    .then(data => alert(data))
-                    .catch(error => console.error('Error:', error));
-            });
-
-            const sendCommand = () => {
-                var command = document.getElementById('console-input').value;
-                console.log("Command sent:", command);
-
-                fetch('/send-command', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({command: command})
-                })
-                .then(response => response.json())
-                .then(data => console.log(data))
-                .catch(error => console.error('Error:', error));
-
-                document.getElementById('console-input').value = '';
-            };
-
-            document.getElementById('send-command').addEventListener('click', sendCommand);
-
-            document.getElementById('console-input').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    sendCommand();
-                }
-            });
-
-            document.getElementById('send-command').addEventListener('click', () => {
-                var command = document.getElementById('console-input').value;
-                console.log("Command sent:", command);
-
-                fetch('/send-command', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({command: command})
-                })
-                .then(response => response.json())
-                .then(data => console.log(data))
-                .catch(error => console.error('Error:', error));
-
-                document.getElementById('console-input').value = '';
-            });
-
-            function checkForServerReady() {
-                let consoleOutput = document.getElementById('console-output').innerText;
-                if (consoleOutput.includes("[Server thread/INFO]: Done")) {
-                    document.getElementById('start-animation-modal').style.display = 'none';
-                    clearInterval(checkServerInterval); 
-                }
-            }
-
-            let checkServerInterval = setInterval(checkForServerReady, 1000);
-
-            function createPlayerActionModal(playerName, event) {
-                let existingModal = document.getElementById('player-action-modal');
-                if (existingModal) existingModal.remove();
-
-                let modal = document.createElement('div');
-                modal.id = 'player-action-modal';
-                modal.className = 'modal';
-
-                let modalContent = document.createElement('div');
-                modalContent.className = 'modal-content';
-
-                modalContent.style.top = event.clientY + 'px';
-                modalContent.style.left = event.clientX + 'px';
-
-                let actions = ['Kick', 'Ban', 'OP', 'Kill', 'Pardon', 'DeOP'];
-                actions.forEach(action => {
-                    let button = document.createElement('button');
-                    button.textContent = `${action} ${playerName}`;
-                    button.onclick = function() {
-                        fetch(`/${action.toLowerCase()}`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ player: playerName })
-                        })
-                        .then(response => response.json())
-                        .then(data => console.log(data))
-                        .catch(error => console.error('Error:', error));
-                    };
-                    modalContent.appendChild(button);
-                });
-
-                modal.appendChild(modalContent);
-                document.body.appendChild(modal);
-
-                modal.style.display = 'block';
-            }
-
-            function updateServerStatusDot() {
-                fetch('/server-status')
-                    .then(response => response.json())
-                    .then(data => {
-                        const statusDot = document.getElementById('server-status-dot');
-                        const startButton = document.getElementById('start-server');
-                        const stopButton = document.getElementById('stop-server');
-
-                        if (data.running) {
-                            statusDot.classList.remove('stopped');
-                            statusDot.classList.add('running');
-                            startButton.disabled = true;  
-                            stopButton.disabled = false; 
-                        } else {
-                            statusDot.classList.remove('running');
-                            statusDot.classList.add('stopped');
-                            startButton.disabled = false; 
-                            stopButton.disabled = true; 
-                        }
-                    })
-                    .catch(error => console.error('Error:', error));
-            }
-
-            setInterval(updateServerStatusDot, 100);
-
-            function hideModal() {
-                var modals = document.getElementsByClassName('modal');
-                for (var i = 0; i < modals.length; i++) {
-                    modals[i].style.display = 'none';
-                }
-            }
-
-            window.onclick = function(event) {
-                if (event.target.className === 'modal') {
-                    hideModal();
-                }
-            }
-
-            function updatePlayerList() {
-                fetch('/get-players')
-                    .then(response => response.json())
-                    .then(playerList => {
-                        let playerListContainer = document.getElementById('player-list-container');
-                        playerListContainer.innerHTML = '';
-                        playerList.forEach(player => {
-                            let playerContainer = document.createElement('div');
-                            let playerNameSpan = document.createElement('span');
-                            let iconSpan = document.createElement('span');
-
-                            playerContainer.classList.add('player-container');
-                            playerNameSpan.textContent = player;
-                            iconSpan.innerHTML = '<i class="material-icons">expand_more</i>'; 
-
-                            playerContainer.appendChild(playerNameSpan);
-                            playerContainer.appendChild(iconSpan);
-
-                            playerListContainer.appendChild(playerContainer);
-
-                            playerContainer.addEventListener('click', (event) => { 
-                                event.preventDefault(); 
-                                console.log("Player container clicked for player: " + player);
-                                createPlayerActionModal(player, event);
-                            });
-                        });
-
-                        checkPlayers(); 
-                    })
-                    .catch(error => console.error('Error:', error));
-            }
-
-            setInterval(updatePlayerList, 1000); 
-        });
-    </script>
+/* Clean minimal scrollbars */
+.console-output,.players,body{
+  scrollbar-width:thin;
+  scrollbar-color:var(--scroll-thumb) var(--scroll-track);
+}
+.console-output::-webkit-scrollbar,
+.players::-webkit-scrollbar{
+  width:10px;
+  height:10px;
+}
+.console-output::-webkit-scrollbar-track,
+.players::-webkit-scrollbar-track{
+  background:var(--scroll-track);
+  border-left:1px solid #141418;
+}
+.console-output::-webkit-scrollbar-thumb,
+.players::-webkit-scrollbar-thumb{
+  background:var(--scroll-thumb);
+  border-radius:10px;
+  border:2px solid var(--scroll-track);
+}
+.console-output::-webkit-scrollbar-thumb:hover,
+.players::-webkit-scrollbar-thumb:hover{
+  background:var(--scroll-thumb-hover);
+}
+</style>
 </head>
 <body>
-    <div id="status-bar" class="status-bar">
-        <div class="status-bar-buttons">
-            <button id="start-server">
-                <i class="material-icons">play_arrow</i>
-                Start Server
-            </button>
-            <button id="stop-server">
-                <i class="material-icons">stop</i> 
-                Stop Server
-            </button>
-        </div>
-        <div id="server-status-dot" class="server-status-dot stopped"></div>
-    </div>    
-    
-    <div class="dashboard">
-        <div class="console">
-            <div class="title">Console</div>
-            <div id="console-output" class="console-output"></div> 
-            <div class="console-input-container"> 
-                <input type="text" id="console-input" placeholder="Enter command..." />
-                <button id="send-command">Send</button>
-            </div>
-        </div>        
-        <div class="server-controls">
-            <div class="player-panel">
-                <div class="player-list" id="player-list-container">
+<div class="card">
+  <div class="header">
+    <h1>Minecraft Server Dashboard</h1>
+    <div class="header-right">
+      <span class="badge"><b>Status</b> <span id="status-text">Unknown</span></span>
+      <span id="server-dot" class="dot stopped"></span>
+    </div>
+  </div>
 
-                </div>
-                <div class="no-players-modal" id="no-players-modal">
-                    <span class="no-players-text">No active players :3</span>
-                </div>
-            </div>            
-        </div>             
-        <div class="file-explorer">
-            <div class="title">File Explorer View</div>
-            <button id="download-server">Download Minecraft Server</button>
-            <button id="accept-eula">Accept EULA</button>
-            <p>File list...</p>
-        </div>
+  <div class="toolbar">
+    <button id="start-server" class="btn primary"><i class="material-icons" style="font-size:18px;vertical-align:-3px">play_arrow</i> Start</button>
+    <button id="stop-server" class="btn"><i class="material-icons" style="font-size:18px;vertical-align:-3px">stop</i> Stop</button>
+    <button id="download-server" class="btn ghost"><i class="material-icons" style="font-size:18px;vertical-align:-3px">file_download</i> Download JAR</button>
+    <button id="accept-eula" class="btn ghost"><i class="material-icons" style="font-size:18px;vertical-align:-3px">rule</i> Accept EULA</button>
+  </div>
+
+  <div class="grid">
+    <div class="panel console-wrap">
+      <div class="title">Console</div>
+      <div id="console-output" class="console-output"></div>
+      <div class="console-inputbar">
+        <input id="console-input" class="input" type="text" placeholder="Enter command...">
+        <button id="send-command" class="btn">Send</button>
+      </div>
     </div>
 
-    <div class="starting-modal" id="start-animation-modal">
-        <div class="starting-modal-content">
-            <img src="https://media.tenor.com/2l4-h42qnmcAAAAi/toothless-dancing-toothless.gif" alt="Toothless Dancing" id="modal-gif">
-            <div class="loader"></div>
-            <p id="loading-text">Starting the Server</p>
+    <div class="side">
+      <div class="section">
+        <div class="title">Players</div>
+        <div id="player-list" class="players"></div>
+        <div style="padding:12px;border-top:1px solid var(--border);font-size:13px;color:#cbd5e1" id="players-empty">No active players</div>
+      </div>
+      <div class="section">
+        <div class="title">Server Info</div>
+        <div class="filebox">
+          <div class="row">
+            <span class="kit"><b>Port</b> <span id="info-port">25565</span></span>
+            <span class="kit"><b>MOTD</b> <span id="info-motd">Server</span></span>
+          </div>
+          <div class="row">
+            <button id="refresh-status" class="btn">Refresh Status</button>
+          </div>
         </div>
-    </div>    
+      </div>
+    </div>
+  </div>
+</div>
 
+<div class="toast-wrap" id="toasts"></div>
+
+<div class="modal" id="player-action-modal">
+  <div class="content">
+    <div style="font-weight:600" id="pam-title"></div>
+    <div class="actions">
+      <button class="btn" data-act="kick">Kick</button>
+      <button class="btn" data-act="ban">Ban</button>
+      <button class="btn" data-act="op">OP</button>
+      <button class="btn" data-act="kill">Kill</button>
+      <button class="btn" data-act="pardon">Pardon</button>
+      <button class="btn" data-act="deop">DeOP</button>
+      <button class="btn ghost" id="pam-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="starting" id="start-modal">
+  <div class="box">
+    <div class="loader"></div>
+    <div>Starting server…</div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded',()=> {
+  const socket=io.connect(location.protocol+'//'+document.domain+':'+location.port)
+  const consoleEl=document.getElementById('console-output')
+  const sendBtn=document.getElementById('send-command')
+  const inputEl=document.getElementById('console-input')
+  const startBtn=document.getElementById('start-server')
+  const stopBtn=document.getElementById('stop-server')
+  const statusText=document.getElementById('status-text')
+  const dot=document.getElementById('server-dot')
+  const toasts=document.getElementById('toasts')
+  const playersEl=document.getElementById('player-list')
+  const playersEmpty=document.getElementById('players-empty')
+  const pam=document.getElementById('player-action-modal')
+  const pamTitle=document.getElementById('pam-title')
+  const pamClose=document.getElementById('pam-close')
+  const downloadBtn=document.getElementById('download-server')
+  const eulaBtn=document.getElementById('accept-eula')
+  const startModal=document.getElementById('start-modal')
+
+  function toast(title,msg,type,actions){
+    const t=document.createElement('div')
+    t.className='toast '+(type||'')
+    t.innerHTML='<div class="t-content"><div class="t-title">'+title+'</div><div class="t-msg">'+(msg||'')+'</div></div>'
+    const act=document.createElement('div')
+    act.className='t-actions'
+    ;(actions||[]).forEach(a=>{const b=document.createElement('button');b.className='t-btn';b.textContent=a.label;b.onclick=()=>{a.onClick&&a.onClick();close()};act.appendChild(b)})
+    t.appendChild(act)
+    toasts.appendChild(t)
+    function close(){t.style.animation='toast-out .16s ease forwards';setTimeout(()=>t.remove(),160)}
+    setTimeout(close,4500)
+    return {close}
+  }
+
+  function colorize(line){
+    if(line.includes("WARN")) return 'warn'
+    if(line.includes("ERROR")) return 'error'
+    if(line.includes("advancement")&&line.includes("[Server thread/INFO]")&&!line.match(/ඞ.*?ඞ/)) return 'green'
+    if(line.includes("completed the challenge")&&line.includes("[Server thread/INFO]")&&!line.match(/ඞ.*?ඞ/)) return 'purple'
+    if(line.includes("reached the goal")&&line.includes("[Server thread/INFO]")&&!line.match(/ඞ.*?ඞ/)) return 'yellow'
+    return ''
+  }
+
+  let autoScroll=true
+  consoleEl.addEventListener('scroll',()=>{
+    const nearBottom=(consoleEl.scrollTop+consoleEl.clientHeight)>=consoleEl.scrollHeight-8
+    autoScroll=nearBottom
+  })
+
+  function fetchConsole(){
+    fetch('/get-console-output').then(r=>r.json()).then(data=>{
+      const wasAtBottom=autoScroll
+      consoleEl.innerHTML=data.map(line=>'<span class="'+colorize(line)+'">'+line.replace(/</g,'&lt;')+'</span>').join('\n')
+      if(wasAtBottom) consoleEl.scrollTop=consoleEl.scrollHeight
+    })
+  }
+
+  function sendCommand(){
+    const cmd=inputEl.value.trim()
+    if(!cmd) return
+    fetch('/send-command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})})
+    .then(r=>r.json()).then(()=>{inputEl.value=''})
+  }
+
+  function updateStatus(){
+    fetch('/server-status').then(r=>r.json()).then(s=>{
+      const running=!!s.running
+      statusText.textContent=running?'Running':'Stopped'
+      dot.classList.toggle('running',running)
+      dot.classList.toggle('stopped',!running)
+      startBtn.disabled=running
+      stopBtn.disabled=!running
+    })
+  }
+
+  function updatePlayers(){
+    fetch('/get-players').then(r=>r.json()).then(list=>{
+      playersEl.innerHTML=''
+      list.forEach(p=>{
+        const row=document.createElement('div')
+        row.className='player'
+        row.innerHTML='<span class="name">'+p+'</span><span class="material-icons" style="opacity:.7">more_vert</span>'
+        row.onclick=()=>openPlayerModal(p)
+        playersEl.appendChild(row)
+      })
+      playersEmpty.style.display=list.length? 'none':'block'
+    })
+  }
+
+  function openPlayerModal(name){
+    pamTitle.textContent=name
+    pam.style.display='flex'
+    pam.dataset.player=name
+  }
+  function closePam(){pam.style.display='none'}
+
+  let watcher=null
+  let baselineCount=0
+  const readyRe=/\[Server thread\/INFO\]: Done/i
+  const errorRe=/(Exception|Error:|UnsupportedClassVersionError|Could not find or load main class|Address already in use|A fatal error has been detected|Failed|Failure)/i
+
+  function getLines(){
+    const text=consoleEl.textContent||''
+    return text.split('\n')
+  }
+
+  function startWatching(){
+    stopWatching()
+    baselineCount=getLines().length
+    watcher=setInterval(()=>{
+      const lines=getLines()
+      const recent=lines.slice(baselineCount)
+      if(!recent.length) return
+      if(recent.some(l=>readyRe.test(l))){
+        startModal.style.display='none'
+        toast('Server Ready','Done loading','ok')
+        stopWatching()
+        return
+      }
+      const err=recent.slice().reverse().find(l=>errorRe.test(l))
+      if(err){
+        startModal.style.display='none'
+        toast('Start Failed',err,'err')
+        stopWatching()
+      }
+    },500)
+  }
+
+  function stopWatching(){
+    if(watcher){ clearInterval(watcher); watcher=null }
+  }
+
+  document.getElementById('refresh-status').onclick=updateStatus
+
+  startBtn.onclick=()=>{
+    fetch('/start')
+      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.text() })
+      .then(()=>{ toast('Starting','Server is starting','ok'); startModal.style.display='flex'; startWatching() })
+      .catch(e=>{ startModal.style.display='none'; toast('Start Failed',String(e),'err') })
+  }
+
+  stopBtn.onclick=()=>{
+    fetch('/stop').then(r=>r.json()).then(j=>{toast('Stopped',j.message||'Server stopped','ok')}).catch(()=>toast('Error','Failed to stop','err'))
+    stopWatching()
+    startModal.style.display='none'
+  }
+
+  downloadBtn.onclick=()=>{
+    fetch('/download-server').then(r=>{if(!r.ok) throw new Error(); return r.blob()}).then(b=>{
+      const url=URL.createObjectURL(b);const a=document.createElement('a');a.href=url;a.download='minecraft_server.jar';document.body.appendChild(a);a.click();URL.revokeObjectURL(url);a.remove()
+    })
+  }
+
+  eulaBtn.onclick=()=>{
+    fetch('/accept-eula',{method:'POST'}).then(r=>r.text()).then(t=>toast('EULA',t,'ok')).catch(()=>toast('EULA','Failed','err'))
+  }
+
+  sendBtn.onclick=sendCommand
+  inputEl.addEventListener('keypress',e=>{if(e.key==='Enter') sendCommand()})
+
+  pamClose.onclick=closePam
+  pam.addEventListener('click',e=>{if(e.target===pam) closePam()})
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePam();startModal.style.display='none';stopWatching()}})
+
+  setInterval(fetchConsole,300)
+  setInterval(updateStatus,800)
+  setInterval(updatePlayers,1000)
+
+  updateStatus()
+  updatePlayers()
+  fetchConsole()
+})
+</script>
 </body>
 </html>

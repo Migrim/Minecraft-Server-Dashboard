@@ -1,13 +1,11 @@
-from flask import Flask, render_template, send_from_directory, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for
 from flask_socketio import SocketIO
 from threading import Thread
 import subprocess
 import threading
 import os
 import re
-import sys
 import time
-import requests
 import json
 
 app = Flask(__name__, instance_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance'), instance_relative_config=True)
@@ -16,133 +14,53 @@ socketio = SocketIO(app)
 
 console_output = []
 players = set()
-server_running_status = False
-
-jar_path = 'instance/server-files' 
-server_files_dir = os.path.join(app.instance_path, 'server-files')
-jar_file_path = os.path.join(app.instance_path, server_files_dir, 'minecraft_server.jar')
 server_process = None
 
-@app.route('/get-server-options')
-def get_server_options():
-    try:
-        response = requests.get("https://centrojars.com/api/fetchJar/fetchAllTypes.php")
-        response.raise_for_status()
-        raw_data = response.json()
+JAVA_CMD = os.environ.get('JAVA_CMD', 'java')
 
-        types_by_category = raw_data.get("response", {})
+server_files_dir = os.path.join(app.instance_path, 'server')
+jar_filename = 'server.jar'
+jar_path = os.path.join(server_files_dir, jar_filename)
 
-        flattened_types = []
-        for category, types in types_by_category.items():
-            for t in types:
-                flattened_types.append({"category": category, "type": t})
+os.makedirs(server_files_dir, exist_ok=True)
 
-        final_data = {
-            "types": flattened_types
-        }
+@app.before_request
+def ensure_jar_present():
+    allowed = {'install', 'upload_jar', 'static', 'jar_status'}
+    if not os.path.isfile(jar_path) and request.endpoint not in allowed:
+        return redirect(url_for('install'))
 
-        filepath = os.path.join(app.instance_path, 'server_options.json')
-        with open(filepath, 'w') as json_file:
-            json.dump(final_data, json_file, indent=4)
-
-        return jsonify(final_data)
-
-    except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({"error": "Failed to fetch server options."})
-    
-@app.route('/get-versions')
-def get_versions():
-    category = request.args.get('category')
-    type_ = request.args.get('type')
-    if not category or not type_:
-        return jsonify({"error": "Missing category or type"}), 400
-    try:
-        url = f"https://centrojars.com/api/fetchJar/{category}/{type_}/fetchAllDetails.php"
-        print("Fetching versions from:", url)
-
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-
-        files = data.get("response", {}).get("files", [])
-        versions = [file.get("version") for file in files if "version" in file]
-
-        print("Parsed versions:", versions)
-        return jsonify(versions)
-
-    except Exception as e:
-        print(f"Version fetch error: {e}")
-        return jsonify({"error": "Failed to fetch versions."}), 500
-    
-@app.route('/get-server-json')
-def get_server_json():
-    try:
-        filepath = os.path.join(app.instance_path, 'server_options.json')
-        with open(filepath, 'r') as json_file:
-            server_options = json.load(json_file)
-        return jsonify(server_options)
-    except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({"error": "Failed to read server options from file."})
-
-@app.route('/install')
-def install():
-    filepath = os.path.join(app.instance_path, 'server_options.json')
-
-    if not os.path.isfile(filepath):
-        return "Server options file is missing. Please visit /get-server-options first."
-
-    try:
-        with open(filepath, 'r') as json_file:
-            server_options = json.load(json_file)
-
-        # Directly pass the already flattened list
-        return render_template('install.html', server_options=server_options)
-
-    except Exception as e:
-        print(f"Error loading JSON: {e}")
-        return "An error occurred while loading server options."
-
-@app.route('/download-server')
-def download_minecraft_server():
-    try:
-        type_param = request.args.get('type')
-        version = request.args.get('version')
-
-        if not type_param or not version:
-            return "Missing type or version parameters.", 400
-
-        category, server_type = type_param.split(':')
-
-        download_url = f"https://centrojars.com/api/fetchJar/{server_type}/{category}/{version}"
-        print(f"Directly downloading from: {download_url}")
-
-        minecraft_server_path = os.path.join(app.instance_path, server_files_dir, 'minecraft_server.jar')
-        os.makedirs(os.path.dirname(minecraft_server_path), exist_ok=True)
-
-        with requests.get(download_url, stream=True) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
-            block_size = 1024
-            progress = 0
-            with open(minecraft_server_path, 'wb') as f:
-                for data in r.iter_content(block_size):
-                    progress += len(data)
-                    f.write(data)
-                    done = int(50 * progress / total_size)
-                    print(f"\rDownload Progress: [{'#' * done}{'.' * (50 - done)}] {progress * 100 / total_size:.2f}%", end='')
-
-        print("\nDownload completed.")
-        return send_from_directory(directory=os.path.dirname(minecraft_server_path), path='minecraft_server.jar', as_attachment=True)
-
-    except Exception as e:
-        print(f"Error: {e}")
-        return "An error occurred.", 500
-    
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html')
+
+@app.route('/install')
+def install():
+    return render_template('install.html', server_dir=server_files_dir, expected=jar_filename)
+
+@app.route('/upload-jar', methods=['POST'])
+def upload_jar():
+    if 'file' not in request.files:
+        return jsonify({'ok': False, 'error': 'no file'}), 400
+    f = request.files['file']
+    if f.filename == '':
+        return jsonify({'ok': False, 'error': 'empty filename'}), 400
+    name = f.filename.lower()
+    if not name.endswith('.jar'):
+        return jsonify({'ok': False, 'error': 'must be a .jar'}), 400
+    os.makedirs(server_files_dir, exist_ok=True)
+    tmp = os.path.join(server_files_dir, '_upload.tmp')
+    f.save(tmp)
+    final_path = os.path.join(server_files_dir, jar_filename)
+    if os.path.exists(final_path):
+        os.remove(final_path)
+    os.replace(tmp, final_path)
+    return jsonify({'ok': True, 'path': final_path})
+
+@app.route('/jar-status')
+def jar_status():
+    exists = os.path.isfile(jar_path)
+    return jsonify({'folder': server_files_dir, 'expected_jar': jar_filename, 'exists': exists})
 
 def save_server_status(status):
     status_path = os.path.join(app.instance_path, 'server_status.json')
@@ -156,30 +74,40 @@ def read_server_status():
             return json.load(f).get('server_running', False)
     return False
 
+def java_major():
+    try:
+        out = subprocess.run([JAVA_CMD, '-version'], capture_output=True, text=True)
+        s = (out.stderr or out.stdout)
+        m = re.search(r'version\s+"(\d+)(\.\d+)?', s)
+        return int(m.group(1)) if m else None
+    except Exception:
+        return None
+
 def start_server():
     global server_process
-    save_server_status(True)
-    jar_path = os.path.join(server_files_dir, 'minecraft_server.jar')
-
     if not os.path.isfile(jar_path):
-        print(f"Fehler: Der Minecraft-Server-JAR-File ist nicht unter {jar_path} vorhanden.")
         return
-
+    ver = java_major()
+    if ver is None:
+        console_output.append('Error: Java not found. Install Java 21+ or set JAVA_CMD.')
+        return
+    if ver < 21:
+        console_output.append(f'Error: Java {ver} detected. This server requires Java 21+. Install Java 21 and set JAVA_CMD or upgrade PATH.')
+        return
+    save_server_status(True)
     if server_process is None or server_process.poll() is not None:
         try:
-            print(f"Starte einen neuen Server von {jar_path}")
             server_process = subprocess.Popen(
-                ["java", "-Xmx1024M", "-Xms1024M", "-jar", jar_path, "nogui"],
+                [JAVA_CMD, "-Xmx1024M", "-Xms1024M", "-jar", jar_filename, "nogui"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 cwd=server_files_dir
             )
-            threading.Thread(target=emit_server_output, args=(server_process,)).start()
-            print("Minecraft Server gestartet.")
+            threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
         except Exception as e:
-            print(f"Fehler beim Starten des Minecraft-Servers: {e}")
+            console_output.append(f"Server start error: {e}")
 
 @app.route('/send-command', methods=['POST'])
 def send_command():
@@ -187,42 +115,26 @@ def send_command():
     command = request.json['command'] + '\n'
     try:
         if server_process and server_process.stdin and not server_process.poll():
-            print(f"Sending command to server: {command.strip()}")
             server_process.stdin.write(command)
             server_process.stdin.flush()
-            console_output.append(f"Command: {command.strip()}") 
+            console_output.append(f"Command: {command.strip()}")
             return jsonify({"status": "Command sent"})
         else:
-            print("Server not running or input stream closed")
             return jsonify({"error": "Server not running or input stream closed"}), 400
     except Exception as e:
-        print(f"Error sending command: {e}")
         return jsonify({"error": str(e)}), 500
 
 def send_server_command(command):
-    """
-    Sends a command to the Minecraft server's console.
-
-    Parameters:
-    command (str): The command to send to the Minecraft server.
-
-    Returns:
-    json: A JSON response indicating the status of the command.
-    """
     global server_process, console_output
     try:
         if server_process and server_process.stdin and not server_process.poll():
-            command_with_newline = f'{command}\n'
-            print(f"Sending command to server: {command.strip()}")
-            server_process.stdin.write(command_with_newline)
+            server_process.stdin.write(f'{command}\n')
             server_process.stdin.flush()
             console_output.append(f"Command: {command.strip()}")
             return jsonify({"status": "Command sent", "command": command.strip()})
         else:
-            print("Server not running or input stream closed")
             return jsonify({"error": "Server not running or input stream closed"}), 400
     except Exception as e:
-        print(f"Error sending command: {e}")
         console_output.append(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
 
@@ -260,34 +172,22 @@ def deop_player():
 
 @app.route('/start')
 def start_minecraft_server():
-    thread = Thread(target=start_server)
-    thread.start()
+    Thread(target=start_server, daemon=True).start()
     return "Minecraft Server wird gestartet..."
 
 def emit_server_output(process):
     global console_output, players
     for line in iter(process.stdout.readline, ''):
-
         line_display = line.replace('<', 'ඞ').replace('>', 'ඞ')
-
-        print(f"Console Output: {line_display}")  
         console_output.append(line_display)
         socketio.emit('server_output', {'data': line_display})
-        
         join_match = re.search(r"\[Server thread/INFO\]: (\w+) joined the game", line)
         if join_match:
-            player_joined = join_match.group(1)
-            print(f"Player Joined: {player_joined}")  
-            players.add(player_joined)
-        
+            players.add(join_match.group(1))
         leave_match = re.search(r"\[Server thread/INFO\]: (\w+) left the game", line)
         if leave_match:
-            player_left = leave_match.group(1)
-            print(f"Player Left: {player_left}")  
-            players.discard(player_left)
-        
+            players.discard(leave_match.group(1))
         if "Stopping server" in line:
-            print("Server Stopping. Clearing player list.")  
             players.clear()
 
 @app.route('/get-players')
@@ -302,18 +202,15 @@ def get_console_output():
 def accept_eula():
     eula_file_path = os.path.join(server_files_dir, 'eula.txt')
     try:
+        if not os.path.exists(eula_file_path):
+            return "EULA file not found.", 400
         with open(eula_file_path, 'r') as file:
             content = file.readlines()
-
         updated_content = [line.replace('eula=false', 'eula=true') for line in content]
-
         with open(eula_file_path, 'w') as file:
             file.writelines(updated_content)
-
-        print("EULA accepted.")
         return "EULA accepted."
-    except Exception as e:
-        print(f"Fehler: {e}")
+    except Exception:
         return "Ein Fehler ist aufgetreten."
 
 def stop_server_async():
@@ -322,18 +219,16 @@ def stop_server_async():
         try:
             server_process.stdin.write('/say The server will shutdown in 10 seconds\n')
             server_process.stdin.flush()
-            time.sleep(7) 
-
+            time.sleep(7)
             for remaining in range(3, 0, -1):
                 server_process.stdin.write(f'/say Stopping server in {remaining} \n')
                 server_process.stdin.flush()
                 time.sleep(1)
-
             server_process.stdin.write('stop\n')
             server_process.stdin.flush()
-            server_process.wait()  
-        except Exception as e:
-            print(f"Error during server shutdown: {e}")
+            server_process.wait()
+        except Exception:
+            pass
         finally:
             server_process = None
 
@@ -342,11 +237,9 @@ def stop_minecraft_server():
     global server_process
     save_server_status(False)
     if server_process is not None and server_process.stdin:
-        print("Starting countdown for server shutdown.")
-        Thread(target=stop_server_async).start() 
+        Thread(target=stop_server_async, daemon=True).start()
         return jsonify({"message": "Minecraft Server shutdown initiated."})
     else:
-        print("Minecraft Server is not running.")
         return jsonify({"error": "Minecraft Server is not running."}), 400
 
 @app.route('/server-status')
@@ -354,4 +247,4 @@ def server_status():
     return jsonify({'running': read_server_status()})
 
 if __name__ == '__main__':
-    socketio.run(app, debug=False, port=7440, host='0.0.0.0')
+    socketio.run(app, debug=True, port=5003, host='0.0.0.0')

@@ -1,103 +1,167 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Server Install</title>
-    <style>
-        body {
-            background-color: #121212;
-            color: white;
-            font-family: Arial, sans-serif;
-        }
-        form {
-            margin: 20px;
-        }
-        label, select {
-            margin-right: 10px;
-        }
-        select {
-            background-color: #1e1e1e;
-            color: white;
-            border: 1px solid #333;
-            padding: 5px;
-        }
-        input[type="submit"] {
-            background-color: #333;
-            color: white;
-            border: 1px solid #555;
-            padding: 5px 10px;
-            cursor: pointer;
-        }
-        input[type="submit"]:hover {
-            background-color: #444;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install Server JAR</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:#4f46e5;--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f,transparent),linear-gradient(#0a0a0a,#0a0a0a);color:var(--text);font-family:Roboto,system-ui,Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px}
+p{margin:0 0 8px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;word-break:break-word;hyphens:auto}
+.card{width:min(760px,94vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
+.header{padding:26px 28px 14px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.header h1{margin:0;font-size:22px;letter-spacing:.2px}
+.meta{display:grid;grid-template-columns:minmax(140px,1fr) minmax(280px,2fr);gap:10px;padding:0 28px 18px}
+.meta .chip{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px dashed var(--border);border-radius:12px;font-size:13px;color:#d1d5db;background:#0c0c10;min-width:0}
+.meta .chip b{color:#fff;font-weight:600;white-space:nowrap}
+.meta .chip span{overflow:hidden;text-overflow:ellipsis}
+@media (max-width:640px){.meta{grid-template-columns:1fr}}
+.drop{margin:0 28px 22px;border:1.5px dashed #34343d;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0));min-height:220px;display:grid;place-items:center;transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.drop.drag{border-color:var(--accent);background:linear-gradient(180deg,rgba(79,70,229,.08),rgba(255,255,255,0));transform:scale(1.01)}
+.drop-inner{text-align:center;padding:28px 24px;max-width:520px}
+.icon{width:54px;height:54px;margin:0 auto 12px;opacity:.9}
+.drop h2{margin:0 0 6px;font-size:18px}
+.hint{font-size:13px}
+.actions{margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
+.btn:hover{background:#191a20}
+.btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn.ghost{background:transparent}
+.fileline{margin-top:10px;font-size:13px;color:#cbd5e1;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
+.badge b{color:#fff}
+.hidden{display:none}
+
+.progress{height:10px;width:100%;background:#131318;border:1px solid var(--border);border-radius:999px;overflow:hidden;margin-top:14px}
+.progress>span{display:block;height:100%;width:0%;background:var(--accent);transition:width .18s ease;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+
+.status{margin-top:10px;font-size:13px;text-align:center;color:var(--muted);min-height:18px}
+.note{padding:0 28px 0 28px;color:#cbd5e1;font-size:13px}
+.footer{padding:18px 28px 24px;display:flex;gap:10px;justify-content:flex-end}
+.toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
+.toast{min-width:280px;max-width:96vw;background:#111114;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(16px);opacity:0;animation:toast-in .18s ease forwards}
+.toast.ok{border-color:#1f3f28}
+.toast.err{border-color:#3a1f22}
+.toast .t-content{flex:1}
+.toast .t-title{font-weight:600;margin:0 0 2px}
+.toast .t-msg{font-size:13px;color:#cbd5e1}
+.toast .t-actions{display:flex;gap:8px;margin-left:8px}
+.toast .t-btn{border:1px solid var(--border);background:#151518;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer}
+@keyframes toast-in{to{transform:translateY(0);opacity:1}}
+@keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+</style>
 </head>
 <body>
-    <form action="/download-server" method="get">
-        <label for="type">Server Type:</label>
-        <select name="type" id="type">
-            <option value="">Select a type</option>
-        </select>
+<div class="card">
+  <div class="header">
+    <h1>Upload Minecraft Server</h1>
+    <button class="btn ghost" id="checkBtn">Check Status</button>
+  </div>
 
-        <label for="version">Version:</label>
-        <select name="version" id="version">
-            <option value="">Select a version</option>
-        </select>
+  <div class="meta">
+    <div class="chip"><b>Expected:</b> <span>{{ expected }}</span></div>
+    <div class="chip"><b>Target:</b> <span>{{ server_dir }}</span></div>
+  </div>
 
-        <input type="submit" value="Download Server">
-    </form>
+  <div id="drop" class="drop" tabindex="0" aria-label="Upload area">
+    <div class="drop-inner">
+      <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0l-4 4m4-4l4 4M6 12H5a3 3 0 00-3 3v2a3 3 0 003 3h14a3 3 0 003-3v-2a3 3 0 00-3-3h-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h2>Drag & Drop your .jar</h2>
+      <p class="hint">or choose a file</p>
+      <div class="actions">
+        <button id="choose" class="btn">Choose File</button>
+        <button id="upload" class="btn primary hidden">Upload</button>
+      </div>
+      <div class="fileline" id="fileline"></div>
+      <input id="file" type="file" accept=".jar" class="hidden">
+      <div class="progress hidden" id="bar"><span></span></div>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const typeSelect = document.getElementById('type');
-            const versionSelect = document.getElementById('version');
+  <div class="note">After a successful upload you will be redirected to the dashboard.</div>
+  <div class="footer"></div>
+</div>
 
-            fetch('/get-server-json')
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.types || !Array.isArray(data.types)) {
-                        console.error('Invalid format from server:', data);
-                        return;
-                    }
+<div class="toast-wrap" id="toasts"></div>
 
-                    data.types.forEach(entry => {
-                        const option = document.createElement('option');
-                        option.value = `${entry.category}:${entry.type}`;
-                        option.textContent = `${entry.category} - ${entry.type}`;
-                        typeSelect.appendChild(option);
-                    });
+<script>
+const drop=document.getElementById('drop')
+const fileInput=document.getElementById('file')
+const chooseBtn=document.getElementById('choose')
+const uploadBtn=document.getElementById('upload')
+const bar=document.getElementById('bar')
+const barFill=bar.querySelector('span')
+const statusEl=document.getElementById('status')
+const fileline=document.getElementById('fileline')
+const checkBtn=document.getElementById('checkBtn')
+const toasts=document.getElementById('toasts')
+let file=null
 
-                    typeSelect.addEventListener('change', function () {
-                        const [category, type] = this.value.split(':');
-                        versionSelect.innerHTML = '<option value="">Loading...</option>';
+function setStatus(t){statusEl.textContent=t||''}
+function enableUpload(b){uploadBtn.classList.toggle('hidden',!b)}
+function setFileLine(f){fileline.innerHTML=f?('<span class="badge"><b>File</b>'+f.name+'</span>'+'<span class="badge"><b>Size</b>'+Math.ceil(f.size/1024)+' KB</span>'):''}
+function toast(title,msg,type,actions){
+  const t=document.createElement('div')
+  t.className='toast '+(type||'')
+  t.innerHTML='<div class="t-content"><div class="t-title">'+title+'</div><div class="t-msg">'+(msg||'')+'</div></div>'
+  const act=document.createElement('div')
+  act.className='t-actions'
+  ;(actions||[]).forEach(a=>{const b=document.createElement('button');b.className='t-btn';b.textContent=a.label;b.onclick=()=>{a.onClick&&a.onClick();close()};act.appendChild(b)})
+  t.appendChild(act)
+  toasts.appendChild(t)
+  function close(){t.style.animation='toast-out .16s ease forwards';setTimeout(()=>t.remove(),160)}
+  setTimeout(close,4500)
+  return {close,el:t}
+}
 
-                        fetch(`/get-versions?category=${category}&type=${type}`)
-                            .then(response => response.json())
-                            .then(versions => {
-                                versionSelect.innerHTML = '';
-                                if (Array.isArray(versions)) {
-                                    console.log("Loaded versions:", versions);  // 👈 Add this
-                                    versions.forEach(version => {
-                                        const opt = document.createElement('option');
-                                        opt.value = version;
-                                        opt.textContent = version;
-                                        versionSelect.appendChild(opt);
-                                    });
-                                } else {
-                                    versionSelect.innerHTML = '<option value="">No versions found</option>';
-                                }
-                            })
-                            .catch(error => {
-                                console.error("Error fetching versions:", error);
-                                versionSelect.innerHTML = '<option value="">Error loading versions</option>';
-                            });
-                    });
-                })
-                .catch(error => {
-                    console.error('Failed to load types:', error);
-                });
-        });
-    </script>
+chooseBtn.onclick=()=>fileInput.click()
+fileInput.onchange=e=>{file=e.target.files[0]||null;setStatus(file?file.name:'');setFileLine(file);enableUpload(!!file)}
+
+;['dragenter','dragover'].forEach(ev=>{drop.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();drop.classList.add('drag')})})
+;['dragleave','drop'].forEach(ev=>{drop.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();drop.classList.remove('drag')})})
+drop.addEventListener('drop',e=>{
+  const dt=e.dataTransfer
+  if(!dt||!dt.files||!dt.files.length)return
+  const f=dt.files[0]
+  if(!f.name.toLowerCase().endsWith('.jar')){setStatus('File must be a .jar');toast('Invalid file','Please select a .jar file','err');return}
+  file=f;setStatus(file.name);setFileLine(file);enableUpload(true)
+})
+
+uploadBtn.onclick=()=>{
+  if(!file){setStatus('Choose a .jar first');toast('No file','Choose a .jar first','err');return}
+  if(!file.name.toLowerCase().endsWith('.jar')){setStatus('File must be a .jar');toast('Invalid file','Please select a .jar file','err');return}
+  const fd=new FormData();fd.append('file',file)
+  const xhr=new XMLHttpRequest();xhr.open('POST','/upload-jar')
+  xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round((e.loaded/e.total)*100);bar.classList.remove('hidden');barFill.style.width=p+'%';setStatus('Uploading '+p+'%')}}
+  xhr.onload=()=>{let ok=false,err='';try{const r=JSON.parse(xhr.responseText);ok=!!r.ok;err=r.error||''}catch(_){err='Unexpected response'}
+    if(ok){
+      setStatus('Upload complete')
+      const t=toast('Upload complete','Redirecting in 7 seconds','ok',[{label:'Open Dashboard',onClick:()=>location.href='/'},{label:'Check Status',onClick:()=>window.open('/jar-status','_blank')}])
+      setTimeout(()=>{window.location.href='/'},7000)
+    }else{
+      setStatus(err||'Upload failed')
+      toast('Upload failed',err||'Please try again','err',[{label:'Retry',onClick:()=>uploadBtn.click()}])
+    }}
+  xhr.onerror=()=>{setStatus('Network error');toast('Network error','Please check your connection','err')}
+  xhr.send(fd)
+}
+
+checkBtn.onclick=async()=>{
+  try{
+    const r=await fetch('/jar-status',{headers:{'Accept':'application/json'}})
+    if(!r.ok) throw new Error('HTTP '+r.status)
+    const j=await r.json()
+    const msg=(j.status||'Unknown').toString()
+    toast('Server Status',msg,'ok',[{label:'Open',onClick:()=>window.open('/jar-status','_blank')}])
+  }catch(e){
+    toast('Status Error','Could not fetch status','err',[{label:'Open',onClick:()=>window.open('/jar-status','_blank')}])
+  }
+}
+</script>
 </body>
 </html>

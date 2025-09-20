@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Minecraft Server{% endblock %}</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<style>
+:root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:#4f46e5;--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:#0a0a0a;color:var(--text);font-family:Roboto,system-ui,Segoe UI,Arial,sans-serif}
+
+/* Sticky navbar */
+.nav-outer{
+  position:sticky;
+  top:0;
+  z-index:100;
+  backdrop-filter:saturate(120%) blur(10px);
+  background:rgba(14,14,17,.72);
+  border-bottom:1px solid var(--border);
+}
+.nav-outer::before{
+  content:"";
+  position:absolute;inset:0 0 auto 0;height:1px;opacity:.7;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);
+}
+.nav-inner{
+  width:min(1100px,96vw);
+  margin:0 auto;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 8px;
+}
+.nav-inner .brand{
+  margin-right:auto;
+  display:flex;align-items:center;gap:10px;
+  padding:6px 10px;border-radius:10px;
+  color:#fff;text-decoration:none;font-weight:700;letter-spacing:.2px
+}
+.nav{
+  display:flex;align-items:center;gap:10px;
+}
+.nav a{
+  color:#cbd5e1;text-decoration:none;
+  padding:8px 12px;border-radius:10px;border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,color .18s ease
+}
+.nav a:hover{background:#141418;border-color:#22242b}
+.nav a.active{color:#fff;border-color:#2a2a33;background:#141418}
+
+/* Drop shadow only after scrolling */
+.nav-outer.scrolled{
+  box-shadow:0 8px 30px rgba(0,0,0,.35);
+}
+
+/* Page container */
+.container{
+  padding:24px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+</style>
+{% block head_extra %}{% endblock %}
+</head>
+<body>
+<header class="nav-outer" id="nav">
+  <div class="nav-inner">
+    <a href="{{ url_for('dashboard') }}" class="brand">
+      Minecraft Server
+    </a>
+    <nav class="nav">
+      <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint=='dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="{{ url_for('files') }}" class="{% if request.endpoint=='files' %}active{% endif %}">Files</a>
+      <a href="{{ url_for('settings') }}" class="{% if request.endpoint=='settings' %}active{% endif %}">Server Settings</a>
+      <a href="{{ url_for('panel_settings') }}" class="{% if request.endpoint=='panel_settings' %}active{% endif %}">Panel Settings</a>
+      <a href="{{ url_for('logout') }}" class="{% if request.endpoint=='logout' %}active{% endif %}">Logout</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+
+<script>
+const nav=document.getElementById('nav')
+function onScroll(){
+  if(window.scrollY>4){nav.classList.add('scrolled')}else{nav.classList.remove('scrolled')}
+}
+document.addEventListener('scroll',onScroll,{passive:true})
+onScroll()
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

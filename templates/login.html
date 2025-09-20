@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login</title>
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:#4f46e5;--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f,transparent),linear-gradient(#0a0a0a,#0a0a0a);color:var(--text);font-family:Roboto,system-ui,Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{width:min(380px,92vw);background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
+.header{padding:16px 18px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.header h1{margin:0;font-size:18px;letter-spacing:.2px}
+.form{padding:0 18px 16px;display:grid;gap:8px}
+.inp{width:100%;background:#111114;border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:#fff;font-size:14px;outline:none}
+.inp:focus{border-color:#3b3be0}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:600;font-size:14px;cursor:pointer;transition:filter .2s ease;width:100%}
+.btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
+.btn.primary:hover{filter:brightness(1.05)}
+.toast-wrap{position:fixed;top:16px;right:16px;display:flex;flex-direction:column;gap:10px;z-index:50}
+.toast{min-width:260px;max-width:min(92vw,360px);background:#111114;border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(-8px);opacity:0;animation:toast-in .18s ease forwards}
+.toast.ok{border-color:#1f3f28}
+.toast.err{border-color:#3a1f22}
+.toast .t-msg{font-size:13px;color:#e5e7eb;line-height:1.45}
+.toast .t-close{margin-left:auto;border:0;background:transparent;color:#9ca3af;font-weight:700;cursor:pointer;padding:2px 6px;border-radius:6px}
+.toast .t-close:hover{color:#fff}
+@keyframes toast-in{to{transform:translateY(0);opacity:1}}
+@keyframes toast-out{to{transform:translateY(-8px);opacity:0}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <h1>Sign in</h1>
+  </div>
+  <form class="form" method="post" action="/login" autocomplete="current-password">
+    <input class="inp" type="text" name="username" placeholder="Username" required autofocus>
+    <input class="inp" type="password" name="password" placeholder="Password" required>
+    <button class="btn primary" type="submit">Login</button>
+  </form>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<script>
+function notify(msg,type){
+  var t=document.createElement('div')
+  t.className='toast '+(type||'')
+  var p=document.createElement('div')
+  p.className='t-msg'
+  p.textContent=msg||''
+  var c=document.createElement('button')
+  c.className='t-close'
+  c.textContent='×'
+  c.onclick=function(){close()}
+  t.appendChild(p);t.appendChild(c)
+  var box=document.getElementById('toasts');box.appendChild(t)
+  function close(){t.style.animation='toast-out .16s ease forwards';setTimeout(function(){t.remove()},150)}
+  setTimeout(close,4000)
+  return {close:close,el:t}
+}
+{% if error %}
+notify({{ error|tojson }},'err')
+{% endif %}
+</script>
+</body>
+</html>

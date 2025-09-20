@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Server Settings{% endblock %}
+{% block head_extra %}
+<style>
+body{background:#0a0a0a}
+body::before{
+  content:"";
+  position:fixed;
+  left:0; right:0; top:0; height:420px;
+  background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f 0%,transparent 60%);
+  pointer-events:none;
+}
+p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
+.card{width:min(1100px,96vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
+.header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.header h1{margin:0;font-size:22px;letter-spacing:.2px}
+.header-right{display:flex;align-items:center;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
+.badge b{color:#fff}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
+.btn:hover{background:#191a20}
+.btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
+.btn.primary:hover{filter:brightness(1.05)}
+.btnbar{padding:0 24px 16px;display:flex;gap:10px;flex-wrap:wrap}
+
+.sections{padding:0 24px 24px;display:flex;flex-direction:column;gap:16px}
+.form-panel{border:1px solid var(--border);border-radius:14px;background:#0e0e11;overflow:hidden}
+.form-panel .title{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600;display:flex;align-items:center;justify-content:space-between}
+.form-panel .subtitle{font-size:12px;color:#9aa0ab;font-weight:500}
+
+.form-body{padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:900px){.form-body{grid-template-columns:1fr}}
+.field{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid #141418;border-radius:12px;background:#0b0b0d;padding:12px 14px;transition:border-color .18s ease,background .18s ease,transform .06s ease}
+.field:focus-within{border-color:#2f2fff;background:#0f0f13}
+.field:hover{border-color:#1b1b22}
+.label{font-size:14px;color:#cbd5e1}
+.ctrl{min-width:260px;display:flex;justify-content:flex-end;align-items:center;gap:10px}
+.input,.select{width:100%;border:1px solid var(--border);background:#111114;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;outline:none;transition:border-color .18s ease,box-shadow .18s ease}
+.input:focus,.select:focus{border-color:#3b3be0;box-shadow:0 0 0 3px rgba(59,59,224,.18)}
+.select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#8d8da8 50%),linear-gradient(135deg,#8d8da8 50%,transparent 50%),linear-gradient(to right,#111114,#111114);background-position:calc(100% - 18px) 16px,calc(100% - 12px) 16px,0 0;background-size:6px 6px,6px 6px,100% 100%;background-repeat:no-repeat}
+
+.switch{position:relative;display:inline-flex;align-items:center;gap:10px}
+.sw{position:relative;width:56px;height:32px;border-radius:999px;background:#121217;border:1px solid #22232a;box-shadow:inset 0 1px 0 rgba(255,255,255,.03);cursor:pointer;transition:background .18s ease,border-color .18s ease}
+.sw input{position:absolute;inset:0;opacity:0}
+.sw i{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:999px;background:#2b2b36;box-shadow:0 2px 8px rgba(0,0,0,.35),inset 0 -1px 0 rgba(255,255,255,.04);transition:transform .18s cubic-bezier(.22,1,.36,1),background .18s ease}
+.sw:has(input:checked){background:linear-gradient(180deg,#5151ff,#3c3ce6);border-color:#3b3be0}
+.sw:has(input:checked) i{transform:translateX(24px);background:#fff}
+.swstate{min-width:48px;height:28px;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;border-radius:8px;border:1px solid #1c1d23;background:#101116;font-size:12px;color:#cbd5e1}
+.switch.on .swstate{border-color:#203026;background:#0f161c;color:#9fe2ff}
+
+.hint{font-size:12px;color:#a1a1aa;margin-top:6px}
+.toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
+.toast{min-width:280px;max-width:96vw;background:#111114;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(16px);opacity:0;animation:toast-in .18s ease forwards}
+.toast.ok{border-color:#1f3f28}
+.toast.err{border-color:#3a1f22}
+.toast .t-content{flex:1}
+.toast .t-title{font-weight:600;margin:0 0 2px}
+.toast .t-msg{font-size:13px;color:#cbd5e1}
+@keyframes toast-in{to{transform:translateY(0);opacity:1}}
+@keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333 #0a0a0a;
+}
+
+/* Chrome, Edge, Safari */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #333;
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #444;
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="header">
+    <h1>Server Settings</h1>
+    <div class="header-right">
+      <span class="badge"><b>Profile</b> server.properties</span>
+    </div>
+  </div>
+
+  <div class="btnbar">
+    <button id="save" class="btn primary"><i class="material-icons" style="font-size:18px;vertical-align:-3px">save</i> Save</button>
+    <button id="reload" class="btn"><i class="material-icons" style="font-size:18px;vertical-align:-3px">refresh</i> Reload</button>
+  </div>
+
+  <div class="sections">
+    <div class="form-panel">
+      <div class="title">General <span class="subtitle">Basics and access</span></div>
+      <div class="form-body" id="group-general"></div>
+    </div>
+
+    <div class="form-panel">
+      <div class="title">Network <span class="subtitle">Connectivity & visibility</span></div>
+      <div class="form-body" id="group-network"></div>
+    </div>
+
+    <div class="form-panel">
+      <div class="title">Gameplay <span class="subtitle">Rules & limits</span></div>
+      <div class="form-body" id="group-gameplay"></div>
+    </div>
+
+    <div class="form-panel">
+      <div class="title">World <span class="subtitle">Generation & performance</span></div>
+      <div class="form-body" id="group-world"></div>
+    </div>
+
+    <div class="form-panel">
+      <div class="title">Resource Pack <span class="subtitle">Distribution</span></div>
+      <div class="form-body" id="group-rp"></div>
+    </div>
+
+    <div class="form-panel">
+      <div class="title">RCON / Query <span class="subtitle">Remote control</span></div>
+      <div class="form-body" id="group-remote"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function el(t,a,c){const n=document.createElement(t);if(a)Object.assign(n,a);if(c!==undefined)n.innerHTML=c;return n}
+
+function mkStateBadge(checked){const s=el('span',{className:'swstate'},checked?'On':'Off');return s}
+function kitSwitch(id,label,checked){
+  const row=el('div',{className:'field'})
+  const lab=el('div',{className:'label'},label)
+  const wrap=el('div',{className:'ctrl switch'+(checked?' on':'')})
+  const sw=el('label',{className:'sw'})
+  const input=el('input',{type:'checkbox',id:id})
+  const dot=el('i')
+  const badge=mkStateBadge(!!checked)
+  input.checked=!!checked
+  sw.appendChild(input);sw.appendChild(dot)
+  wrap.appendChild(sw);wrap.appendChild(badge)
+  input.addEventListener('change',()=>{
+    wrap.classList.toggle('on',input.checked)
+    badge.textContent=input.checked?'On':'Off'
+  })
+  row.appendChild(lab);row.appendChild(wrap)
+  return row
+}
+
+function kitSelect(id,label,opts,val){
+  const row=el('div',{className:'field'})
+  const lab=el('div',{className:'label'},label)
+  const sel=el('select',{className:'select ctrl',id:id})
+  opts.forEach(o=>{const op=el('option',{value:o},o);if(String(o)===String(val))op.selected=true;sel.appendChild(op)})
+  row.appendChild(lab);row.appendChild(sel)
+  return row
+}
+
+function kitInput(id,label,val,placeholder){
+  const row=el('div',{className:'field'})
+  const lab=el('div',{className:'label'},label)
+  const inp=el('input',{className:'input ctrl',id:id,type:'text',value:val||'',placeholder:placeholder||''})
+  row.appendChild(lab);row.appendChild(inp)
+  return row
+}
+
+function toast(t,m,type){
+  const w=document.getElementById('toasts')
+  const d=el('div',{className:'toast '+(type||'')})
+  const c=el('div',{className:'t-content'})
+  c.appendChild(el('div',{className:'t-title'},t))
+  c.appendChild(el('div',{className:'t-msg'},m||''))
+  d.appendChild(c);w.appendChild(d)
+  setTimeout(()=>{d.style.animation='toast-out .16s ease forwards';setTimeout(()=>d.remove(),160)},4200)
+}
+
+const groups={
+  general:document.getElementById('group-general'),
+  network:document.getElementById('group-network'),
+  gameplay:document.getElementById('group-gameplay'),
+  world:document.getElementById('group-world'),
+  rp:document.getElementById('group-rp'),
+  remote:document.getElementById('group-remote'),
+}
+
+let current={}
+let schema={}
+
+function render(){
+  groups.general.innerHTML=''
+  groups.network.innerHTML=''
+  groups.gameplay.innerHTML=''
+  groups.world.innerHTML=''
+  groups.rp.innerHTML=''
+  groups.remote.innerHTML=''
+
+  groups.general.appendChild(kitInput('motd','MOTD',current['motd']||'','A Minecraft Server'))
+  groups.general.appendChild(kitSelect('difficulty','Difficulty',schema.options.difficulty,current['difficulty']))
+  groups.general.appendChild(kitSelect('gamemode','Gamemode',schema.options.gamemode,current['gamemode']))
+  groups.general.appendChild(kitSwitch('online-mode','Online Mode',valTrue(current['online-mode'])))
+  groups.general.appendChild(kitSwitch('hardcore','Hardcore',valTrue(current['hardcore'])))
+  groups.general.appendChild(kitSwitch('enforce-whitelist','Enforce Whitelist',valTrue(current['enforce-whitelist'])))
+  groups.general.appendChild(kitSwitch('pvp','PVP',valTrue(current['pvp'])))
+
+  groups.network.appendChild(kitInput('server-ip','Server IP',current['server-ip']||'',''))
+  groups.network.appendChild(kitInput('server-port','Server Port',current['server-port']||'25565','25565'))
+  groups.network.appendChild(kitInput('view-distance','View Distance',current['view-distance']||'10','10'))
+  groups.network.appendChild(kitInput('simulation-distance','Simulation Distance',current['simulation-distance']||'10','10'))
+  groups.network.appendChild(kitInput('rate-limit','Rate Limit',current['rate-limit']||'0','0'))
+  groups.network.appendChild(kitSwitch('hide-online-players','Hide Online Players',valTrue(current['hide-online-players'])))
+  groups.network.appendChild(kitSwitch('log-ips','Log IPs',valTrue(current['log-ips'])))
+  groups.network.appendChild(kitSwitch('use-native-transport','Use Native Transport',valTrue(current['use-native-transport'])))
+
+  groups.gameplay.appendChild(kitSwitch('allow-flight','Allow Flight',valTrue(current['allow-flight'])))
+  groups.gameplay.appendChild(kitSwitch('spawn-monsters','Spawn Monsters',valTrue(current['spawn-monsters'])))
+  groups.gameplay.appendChild(kitInput('player-idle-timeout','Player Idle Timeout',current['player-idle-timeout']||'0','0'))
+  groups.gameplay.appendChild(kitInput('max-players','Max Players',current['max-players']||'20','20'))
+  groups.gameplay.appendChild(kitInput('spawn-protection','Spawn Protection',current['spawn-protection']||'16','16'))
+  groups.gameplay.appendChild(kitSwitch('force-gamemode','Force Gamemode',valTrue(current['force-gamemode'])))
+  groups.gameplay.appendChild(kitInput('function-permission-level','Function Permission Level',current['function-permission-level']||'2','2'))
+  groups.gameplay.appendChild(kitInput('op-permission-level','OP Permission Level',current['op-permission-level']||'4','4'))
+
+  groups.world.appendChild(kitInput('level-name','Level Name',current['level-name']||'world','world'))
+  groups.world.appendChild(kitInput('level-seed','Level Seed',current['level-seed']||'',''))
+  groups.world.appendChild(kitSelect('level-type','Level Type',schema.options['level-type'],current['level-type']))
+  groups.world.appendChild(kitSwitch('generate-structures','Generate Structures',valTrue(current['generate-structures'])))
+  groups.world.appendChild(kitInput('max-world-size','Max World Size',current['max-world-size']||'29999984','29999984'))
+  groups.world.appendChild(kitInput('max-tick-time','Max Tick Time',current['max-tick-time']||'60000','60000'))
+  groups.world.appendChild(kitInput('entity-broadcast-range-percentage','Entity Broadcast %',current['entity-broadcast-range-percentage']||'100','100'))
+  groups.world.appendChild(kitInput('simulation-distance','Simulation Distance',current['simulation-distance']||'10','10'))
+
+  groups.rp.appendChild(kitSwitch('require-resource-pack','Require Resource Pack',valTrue(current['require-resource-pack'])))
+  groups.rp.appendChild(kitInput('resource-pack','Resource Pack URL',current['resource-pack']||'',''))
+  groups.rp.appendChild(kitInput('resource-pack-prompt','Resource Pack Prompt',current['resource-pack-prompt']||'',''))
+  groups.rp.appendChild(kitInput('resource-pack-sha1','Resource Pack SHA1',current['resource-pack-sha1']||'',''))
+
+  groups.remote.appendChild(kitSwitch('enable-rcon','Enable RCON',valTrue(current['enable-rcon'])))
+  groups.remote.appendChild(kitInput('rcon.port','RCON Port',current['rcon.port']||'25575','25575'))
+  groups.remote.appendChild(kitInput('rcon.password','RCON Password',current['rcon.password']||'',''))
+  groups.remote.appendChild(kitSwitch('enable-query','Enable Query',valTrue(current['enable-query'])))
+  groups.remote.appendChild(kitInput('query.port','Query Port',current['query.port']||'25565','25565'))
+}
+
+function valTrue(v){if(typeof v==='boolean')return v;return String(v).toLowerCase()==='true'}
+
+function collect(){
+  const get=(id)=>document.getElementById(id)
+  const data={}
+  ;['motd','difficulty','gamemode','server-ip','server-port','view-distance','simulation-distance','rate-limit','player-idle-timeout','max-players','spawn-protection','function-permission-level','op-permission-level','level-name','level-seed','level-type','max-world-size','max-tick-time','entity-broadcast-range-percentage','resource-pack','resource-pack-prompt','resource-pack-sha1','rcon.port','rcon.password','query.port'].forEach(k=>{
+    const el=get(k);if(!el)return;data[k]=el.value
+  })
+  ;['online-mode','hardcore','enforce-whitelist','pvp','hide-online-players','log-ips','use-native-transport','allow-flight','spawn-monsters','force-gamemode','generate-structures','require-resource-pack','enable-rcon','enable-query'].forEach(k=>{
+    const el=get(k);if(!el)return;data[k]=el.checked
+  })
+  return data
+}
+
+function load(){
+  fetch('/settings-data').then(r=>r.json()).then(j=>{current=j.values;schema=j.schema;render()})
+}
+
+document.getElementById('save').addEventListener('click',()=>{
+  const payload=collect()
+  fetch('/settings-save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  .then(r=>r.json()).then(j=>{if(j.ok){toast('Saved','server.properties updated','ok')}else{toast('Error',j.error||'Save failed','err')}})
+})
+
+document.getElementById('reload').addEventListener('click',load)
+document.addEventListener('DOMContentLoaded',load)
+</script>
+{% endblock %}

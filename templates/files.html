@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Files{% endblock %}
+{% block head_extra %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+body{background:#0a0a0a}
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:420px;background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f 0%,transparent 60%);pointer-events:none}
+.card{width:min(1100px,96vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
+.header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.header h1{margin:0;font-size:22px;letter-spacing:.2px}
+.header-right{display:flex;align-items:center;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
+.badge b{color:#fff}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
+.btn:hover{background:#191a20}
+.btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
+.btn.primary:hover{filter:brightness(1.05)}
+.layout{padding:0 24px 24px;display:grid;grid-template-columns:340px 1fr;gap:16px}
+@media (max-width:1000px){.layout{grid-template-columns:1fr}}
+.panel{border:1px solid var(--border);border-radius:14px;background:#0e0e11;display:flex;flex-direction:column;min-height:520px}
+.panel .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.search{display:flex;gap:8px}
+.input{flex:1;border:1px solid var(--border);background:#111114;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+.tree{flex:1;overflow:auto;padding:10px 12px}
+.tree ul{list-style:none;margin:0;padding:0 0 0 12px}
+.node{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;user-select:none}
+.node:hover{background:#111115}
+.node .chev{width:16px;text-align:center;opacity:.8}
+.node .ico{width:18px;opacity:.9}
+.node.file{padding-left:28px}
+.hidden{display:none}
+.editor{display:flex;flex-direction:column;height:100%}
+.toolbar{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.path{flex:1;min-width:180px;font-size:13px;color:#cbd5e1}
+.tag{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:12px;color:#cbd5e1}
+.area{flex:1;padding:0}
+textarea.editor-ta{width:100%;height:100%;border:0;outline:none;background:#0b0b0d;color:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;padding:12px;border-top:0;border-radius:0 0 14px 14px}
+.meta{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap}
+.toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
+.toast{min-width:280px;max-width:96vw;background:#111114;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(16px);opacity:0;animation:toast-in .18s ease forwards}
+.toast.ok{border-color:#1f3f28}
+.toast.err{border-color:#3a1f22}
+.toast .t-content{flex:1}
+.toast .t-title{font-weight:600;margin:0 0 2px}
+.toast .t-msg{font-size:13px;color:#cbd5e1}
+@keyframes toast-in{to{transform:translateY(0);opacity:1}}
+@keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+.tag.warn{border-color:#3a2a1f;background:#19120f;color:#ffc38f}
+.small{font-size:12px;color:#9aa0ab}
+.ctx{position:fixed;z-index:100;border:1px solid var(--border);background:#0f0f12;border-radius:10px;min-width:180px;box-shadow:0 18px 50px rgba(0,0,0,.5);padding:6px;display:none}
+.ctx .item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:14px;color:#e5e7eb;cursor:pointer}
+.ctx .item:hover{background:#16161b}
+.ctx .item.disabled{opacity:.4;pointer-events:none}
+.ctx .sep{height:1px;background:var(--border);margin:6px 4px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="header">
+    <h1>Files</h1>
+    <div class="header-right">
+      <span class="badge"><b>Root</b> server</span>
+    </div>
+  </div>
+  <div class="layout">
+    <div class="panel">
+      <div class="title">
+        <span>Explorer</span>
+        <div class="search">
+          <input id="search" class="input" placeholder="Filter files…">
+        </div>
+      </div>
+      <div class="tree" id="tree"></div>
+    </div>
+    <div class="panel editor">
+      <div class="toolbar">
+        <div class="path" id="path">No file selected</div>
+        <span id="binwarn" class="tag warn hidden">Binary file</span>
+        <button id="download" class="btn">Download</button>
+        <button id="save" class="btn primary">Save</button>
+      </div>
+      <div class="area">
+        <textarea id="editor" class="editor-ta" spellcheck="false" placeholder="Select a file to view and edit"></textarea>
+      </div>
+      <div class="meta">
+        <span id="meta" class="small"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ctx" id="ctx">
+  <div class="item" id="ctx-open"><span class="material-icons">visibility</span><span>Open</span></div>
+  <div class="item" id="ctx-download"><span class="material-icons">download</span><span>Download</span></div>
+  <div class="sep"></div>
+  <div class="item" id="ctx-delete"><span class="material-icons">delete</span><span>Delete</span></div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function el(t,a,c){
+  const n=document.createElement(t)
+  if(a){
+    const d=a.dataset;const rest={...a};delete rest.dataset
+    Object.assign(n,rest)
+    if(d){for(const k in d){n.setAttribute('data-'+k.replace(/[A-Z]/g,m=>'-'+m.toLowerCase()),d[k])}}
+  }
+  if(c!==undefined)n.innerHTML=c
+  return n
+}
+function toast(t,m,type){
+  const w=document.getElementById('toasts')
+  const d=el('div',{className:'toast '+(type||'')})
+  const c=el('div',{className:'t-content'})
+  c.appendChild(el('div',{className:'t-title'},t))
+  c.appendChild(el('div',{className:'t-msg'},m||''))
+  d.appendChild(c)
+  w.appendChild(d)
+  setTimeout(()=>{d.style.animation='toast-out .16s ease forwards';setTimeout(()=>d.remove(),160)},4200)
+}
+const treeEl=document.getElementById('tree')
+const searchEl=document.getElementById('search')
+const pathEl=document.getElementById('path')
+const metaEl=document.getElementById('meta')
+const warnEl=document.getElementById('binwarn')
+const editor=document.getElementById('editor')
+const btnSave=document.getElementById('save')
+const btnDl=document.getElementById('download')
+const ctx=document.getElementById('ctx')
+const ctxOpen=document.getElementById('ctx-open')
+const ctxDownload=document.getElementById('ctx-download')
+const ctxDelete=document.getElementById('ctx-delete')
+let fullTree=[]
+let openedPath=null
+let openedIsBinary=false
+let ctxTarget=null
+function api(p,opts){
+  const base=location.protocol==='file:'?'http://127.0.0.1:5003':''
+  return fetch(base+p,opts).then(async r=>{
+    const t=await r.text();let j;try{j=JSON.parse(t)}catch(e){}
+    if(!r.ok)throw new Error((j&&j.error)||t||('HTTP '+r.status))
+    return j||{}
+  })
+}
+function icon(name){return '<span class="material-icons ico" style="font-size:16px">'+name+'</span>'}
+function nodeRow(n,isDir){
+  const r=el('div',{className:'node'+(isDir?' dir':' file'),dataset:{path:n.path,type:isDir?'dir':'file'}})
+  const chev=el('span',{className:'chev'},isDir?'<span class="material-icons" style="font-size:16px;opacity:.9">chevron_right</span>':'')
+  const ic=el('span',{innerHTML:isDir?icon('folder'):icon('description')})
+  const txt=el('span',null,n.name)
+  r.appendChild(chev);r.appendChild(ic);r.appendChild(txt)
+  return r
+}
+function drawTree(data,filter){
+  treeEl.innerHTML=''
+  const root=el('ul')
+  function addBranch(parent,items,depth){
+    items.forEach(item=>{
+      if(filter&&!(item.name.toLowerCase().includes(filter)||item.path.toLowerCase().includes(filter))){}
+      const li=el('li')
+      if(item.type==='dir'){
+        const row=nodeRow(item,true)
+        const kids=el('ul',{className:'hidden'})
+        row.addEventListener('click',e=>{
+          const open=kids.classList.toggle('hidden')===false
+          row.querySelector('.chev').innerHTML=open?'<span class="material-icons" style="font-size:16px;opacity:.9">expand_more</span>':'<span class="material-icons" style="font-size:16px;opacity:.9">chevron_right</span>'
+        })
+        li.appendChild(row)
+        addBranch(kids,item.children,depth+1)
+        li.appendChild(kids)
+      }else{
+        const row=nodeRow(item,false)
+        row.addEventListener('click',()=>openFile(item.path))
+        li.appendChild(row)
+      }
+      parent.appendChild(li)
+    })
+  }
+  addBranch(root,data,0)
+  treeEl.appendChild(root)
+}
+function filterTree(){
+  const q=(searchEl.value||'').trim().toLowerCase()
+  if(!q){drawTree(fullTree);return}
+  function cloneIfMatch(node){
+    if(node.type==='dir'){
+      const kids=(node.children||[]).map(cloneIfMatch).filter(Boolean)
+      if(kids.length>0 || node.name.toLowerCase().includes(q)) return {name:node.name,path:node.path,type:'dir',children:kids}
+      return null
+    }else{
+      return (node.name.toLowerCase().includes(q) || node.path.toLowerCase().includes(q))?{...node}:null
+    }
+  }
+  const filtered=fullTree.map(cloneIfMatch).filter(Boolean)
+  drawTree(filtered,q)
+}
+function loadTree(){
+  api('/fs-tree').then(j=>{fullTree=j.tree;drawTree(fullTree)}).catch(err=>toast('Error',err.message||'Failed to load file tree','err'))
+}
+function openFile(path){
+  api('/fs-open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})})
+    .then(j=>{
+      openedPath=path
+      openedIsBinary=!!j.binary
+      editor.value=j.binary?'':j.content||''
+      editor.disabled=j.binary
+      pathEl.textContent=path
+      warnEl.classList.toggle('hidden',!j.binary)
+      metaEl.textContent=(j.size?('Size '+j.size+' bytes • '):'')+(j.mtime?('Modified '+j.mtime):'')
+      if(j.binary) toast('Binary file','Download is available','ok')
+    })
+    .catch(err=>toast('Error',err.message||'Failed to open file','err'))
+}
+function saveFile(){
+  if(!openedPath){toast('No file','Select a file first','err');return}
+  if(openedIsBinary){toast('Not editable','Binary file','err');return}
+  fetch('/fs-save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:openedPath,content:editor.value})})
+    .then(r=>r.json()).then(j=>{if(j.ok){toast('Saved','File saved','ok');openFile(openedPath)}else{toast('Error',j.error||'Save failed','err')}})
+    .catch(()=>toast('Error','Save failed','err'))
+}
+function downloadPath(p,t){
+  if(t!=='file'){toast('Unavailable','Download works for files','err');return}
+  const a=document.createElement('a')
+  a.href='/fs-download?path='+encodeURIComponent(p)
+  a.download=''
+  document.body.appendChild(a);a.click();a.remove()
+}
+function deletePath(p){
+  api('/fs-delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:p})})
+    .then(j=>{
+      if(j.ok){
+        if(openedPath && (openedPath===p || openedPath.startsWith(p+'/'))){
+          openedPath=null;editor.value='';editor.disabled=false;pathEl.textContent='No file selected';metaEl.textContent=''
+        }
+        loadTree()
+        toast('Deleted','Item removed','ok')
+      }else{
+        toast('Error',j.error||'Delete failed','err')
+      }
+    })
+    .catch(err=>toast('Error',err.message||'Delete failed','err'))
+}
+function showCtx(x,y,p,t){
+  ctxTarget={path:p,type:t}
+  ctx.style.display='block'
+  const ww=window.innerWidth, wh=window.innerHeight, cr=ctx.getBoundingClientRect()
+  const nx=Math.min(x,ww-cr.width-8), ny=Math.min(y,wh-cr.height-8)
+  ctx.style.left=nx+'px';ctx.style.top=ny+'px'
+  ctxDownload.classList.toggle('disabled',t!=='file')
+}
+function hideCtx(){ctx.style.display='none';ctxTarget=null}
+treeEl.addEventListener('contextmenu',e=>{
+  const row=e.target.closest('.node')
+  if(!row)return
+  e.preventDefault()
+  const p=row.getAttribute('data-path')
+  const t=row.getAttribute('data-type')
+  showCtx(e.clientX,e.clientY,p,t)
+})
+document.addEventListener('click',e=>{
+  if(!ctx.contains(e.target)) hideCtx()
+})
+window.addEventListener('scroll',hideCtx,{passive:true})
+window.addEventListener('resize',hideCtx)
+ctxOpen.addEventListener('click',()=>{
+  if(!ctxTarget)return
+  if(ctxTarget.type==='file') openFile(ctxTarget.path)
+  hideCtx()
+})
+ctxDownload.addEventListener('click',()=>{
+  if(!ctxTarget)return
+  downloadPath(ctxTarget.path,ctxTarget.type)
+  hideCtx()
+})
+ctxDelete.addEventListener('click',()=>{
+  if(!ctxTarget)return
+  deletePath(ctxTarget.path)
+  hideCtx()
+})
+searchEl.addEventListener('input',filterTree)
+btnSave.addEventListener('click',saveFile)
+btnDl.addEventListener('click',()=>{if(openedPath)downloadPath(openedPath,openedIsBinary?'bin':'file')})
+document.addEventListener('DOMContentLoaded',loadTree)
+</script>
+{% endblock %}

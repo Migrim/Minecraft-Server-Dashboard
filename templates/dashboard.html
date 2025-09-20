@@ -1,17 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Minecraft Server Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+{% extends "base.html" %}
+{% block title %}Minecraft Server Dashboard{% endblock %}
+{% block head_extra %}
 <style>
-:root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:#4f46e5;--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22;--scroll-track:#0b0b0d;--scroll-thumb:#2a2a33;--scroll-thumb-hover:#3a3a44}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0;background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f,transparent),linear-gradient(#0a0a0a,#0a0a0a);color:var(--text);font-family:Roboto,system-ui,Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px}
+body{background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f,transparent),linear-gradient(#0a0a0a,#0a0a0a)}
 p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .card{width:min(1100px,96vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
 .header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -19,9 +10,17 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .header-right{display:flex;align-items:center;gap:10px}
 .badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
 .badge b{color:#fff}
-.dot{width:10px;height:10px;border-radius:999px;background:#444;border:1px solid #2a2a2e}
-.dot.running{background:#22c55e}
-.dot.stopped{background:#ef4444}
+.dot{position:relative;width:10px;height:10px;border-radius:999px;background:#444;border:1px solid #2a2a2e}
+.dot.running{background:#22c55e;border-color:#1d3b29;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:dot-pulse 1.6s ease-out infinite}
+.dot.running::after{content:"";position:absolute;inset:-4px;border-radius:999px;border:2px solid rgba(34,197,94,.35);animation:dot-ring 1.6s ease-out infinite}
+.dot.stopped{background:#ef4444;border-color:#3a1f22;box-shadow:none;animation:none}
+
+@keyframes dot-pulse{to{box-shadow:0 0 0 9px rgba(34,197,94,0)}}
+@keyframes dot-ring{from{transform:scale(.7);opacity:.9}to{transform:scale(1.3);opacity:0}}
+
+@media (prefers-reduced-motion: reduce){
+  .dot.running,.dot.running::after{animation:none;box-shadow:none}
+}
 .btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
 .btn:hover{background:#191a20}
 .btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
@@ -44,16 +43,52 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .side{display:flex;flex-direction:column;gap:16px}
 .section{border:1px solid var(--border);border-radius:14px;background:#0e0e11}
 .section .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600}
-.players{max-height:250px;overflow:auto}
-.player{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #141418}
+.kit{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:#cbd5e1}
+.kit b{color:#fff}
+.filebox .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+/* tiny extra space at the very top of the info list */
+.filebox .row:first-child{margin-top:6px}
+/* NEW: give the info area a bit of left padding */
+.filebox{padding-left:14px}
+
+/* Players list = max 3 rows, scrollable */
+.players{max-height:calc(3*52px);overflow:auto}
+.player{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #141418;min-height:52px}
 .player:last-child{border-bottom:none}
 .player .name{font-size:14px}
-.filebox{padding:14px}
-.filebox .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-.kit{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:#cbd5e1}
-.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:40}
-.modal .content{width:min(420px,92vw);background:#0f0f10;border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
-.actions{display:flex;gap:8px;justify-content:flex-end}
+.more-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);background:#151518;color:#fff;border-radius:8px;padding:6px 8px;cursor:pointer}
+
+/* Floating dropdown (outside scroll area) */
+.dropdown-portal{
+  position:fixed;
+  background:#0f0f10;
+  border:1px solid var(--border);
+  border-radius:10px;
+  min-width:180px;
+  box-shadow:0 14px 40px rgba(0,0,0,.45);
+  display:none;
+  z-index:1000;
+  overflow:hidden;
+}
+.dropdown-portal.show{display:block}
+.dropdown-portal .menu-item{
+  display:block;width:100%;text-align:left;background:transparent;color:#fff;
+  border:none;padding:10px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #141418
+}
+.dropdown-portal .menu-item:last-child{border-bottom:none}
+
+/* Nice scrollbars */
+.console-output,.players,body{scrollbar-width:thin;scrollbar-color:#2a2a33 #0b0b0d}
+.console-output{user-select:text;-webkit-user-select:text}
+.console-output::-webkit-scrollbar,.players::-webkit-scrollbar{width:10px;height:10px}
+.console-output::-webkit-scrollbar-track,.players::-webkit-scrollbar-track{background:#0b0b0d;border-left:1px solid #141418}
+.console-output::-webkit-scrollbar-thumb,.players::-webkit-scrollbar-thumb{background:#2a2a33;border-radius:10px;border:2px solid #0b0b0d}
+.console-output::-webkit-scrollbar-thumb:hover,.players::-webkit-scrollbar-thumb:hover{background:#3a3a44}
+
+/* EULA fade control */
+#accept-eula{opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .22s ease,transform .22s ease}
+#accept-eula.show{opacity:1;pointer-events:auto;transform:none}
+
 .toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
 .toast{min-width:280px;max-width:96vw;background:#111114;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(16px);opacity:0;animation:toast-in .18s ease forwards}
 .toast.ok{border-color:#1f3f28}
@@ -65,39 +100,23 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .toast .t-btn{border:1px solid var(--border);background:#151518;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer}
 @keyframes toast-in{to{transform:translateY(0);opacity:1}}
 @keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+
 .starting{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:45}
 .starting .box{background:#0f0f10;border:1px solid var(--border);border-radius:14px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:12px}
 .loader{width:28px;height:28px;border:3px solid #2a2a33;border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Clean minimal scrollbars */
-.console-output,.players,body{
-  scrollbar-width:thin;
-  scrollbar-color:var(--scroll-thumb) var(--scroll-track);
-}
-.console-output::-webkit-scrollbar,
-.players::-webkit-scrollbar{
-  width:10px;
-  height:10px;
-}
-.console-output::-webkit-scrollbar-track,
-.players::-webkit-scrollbar-track{
-  background:var(--scroll-track);
-  border-left:1px solid #141418;
-}
-.console-output::-webkit-scrollbar-thumb,
-.players::-webkit-scrollbar-thumb{
-  background:var(--scroll-thumb);
-  border-radius:10px;
-  border:2px solid var(--scroll-track);
-}
-.console-output::-webkit-scrollbar-thumb:hover,
-.players::-webkit-scrollbar-thumb:hover{
-  background:var(--scroll-thumb-hover);
+.btn.disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  filter: none !important;
+  background:#151518 !important;
+  border-color: var(--border) !important;
 }
 </style>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
 <div class="card">
   <div class="header">
     <h1>Minecraft Server Dashboard</h1>
@@ -110,7 +129,6 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
   <div class="toolbar">
     <button id="start-server" class="btn primary"><i class="material-icons" style="font-size:18px;vertical-align:-3px">play_arrow</i> Start</button>
     <button id="stop-server" class="btn"><i class="material-icons" style="font-size:18px;vertical-align:-3px">stop</i> Stop</button>
-    <button id="download-server" class="btn ghost"><i class="material-icons" style="font-size:18px;vertical-align:-3px">file_download</i> Download JAR</button>
     <button id="accept-eula" class="btn ghost"><i class="material-icons" style="font-size:18px;vertical-align:-3px">rule</i> Accept EULA</button>
   </div>
 
@@ -134,11 +152,18 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
         <div class="title">Server Info</div>
         <div class="filebox">
           <div class="row">
-            <span class="kit"><b>Port</b> <span id="info-port">25565</span></span>
-            <span class="kit"><b>MOTD</b> <span id="info-motd">Server</span></span>
+            <span class="kit"><b>Minecraft</b> <span id="info-version">—</span></span>
+            <span class="kit"><b>Java</b> <span id="info-java">—</span></span>
+            <span class="kit"><b>Uptime</b> <span id="info-uptime">—</span></span>
           </div>
           <div class="row">
-            <button id="refresh-status" class="btn">Refresh Status</button>
+            <span class="kit"><b>Public IP</b> <span id="info-public">—</span></span>
+            <span class="kit"><b>Local IP</b> <span id="info-local">—</span></span>
+            <span class="kit"><b>Port</b> <span id="info-port">—</span></span>
+          </div>
+          <div class="row">
+            <span class="kit"><b>MOTD</b> <span id="info-motd">—</span></span>
+            <span class="kit"><b>Online Mode</b> <span id="info-online">—</span></span>
           </div>
         </div>
       </div>
@@ -146,22 +171,9 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
   </div>
 </div>
 
+<!-- Toasts + Floating Dropdown Portal -->
 <div class="toast-wrap" id="toasts"></div>
-
-<div class="modal" id="player-action-modal">
-  <div class="content">
-    <div style="font-weight:600" id="pam-title"></div>
-    <div class="actions">
-      <button class="btn" data-act="kick">Kick</button>
-      <button class="btn" data-act="ban">Ban</button>
-      <button class="btn" data-act="op">OP</button>
-      <button class="btn" data-act="kill">Kill</button>
-      <button class="btn" data-act="pardon">Pardon</button>
-      <button class="btn" data-act="deop">DeOP</button>
-      <button class="btn ghost" id="pam-close">Close</button>
-    </div>
-  </div>
-</div>
+<div id="player-dropdown" class="dropdown-portal" role="menu" aria-hidden="true"></div>
 
 <div class="starting" id="start-modal">
   <div class="box">
@@ -169,10 +181,11 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
     <div>Starting server…</div>
   </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded',()=> {
-  const socket=io.connect(location.protocol+'//'+document.domain+':'+location.port)
   const consoleEl=document.getElementById('console-output')
   const sendBtn=document.getElementById('send-command')
   const inputEl=document.getElementById('console-input')
@@ -183,12 +196,56 @@ document.addEventListener('DOMContentLoaded',()=> {
   const toasts=document.getElementById('toasts')
   const playersEl=document.getElementById('player-list')
   const playersEmpty=document.getElementById('players-empty')
-  const pam=document.getElementById('player-action-modal')
-  const pamTitle=document.getElementById('pam-title')
-  const pamClose=document.getElementById('pam-close')
-  const downloadBtn=document.getElementById('download-server')
   const eulaBtn=document.getElementById('accept-eula')
   const startModal=document.getElementById('start-modal')
+  const dropdown=document.getElementById('player-dropdown')
+  const exitRe=/Server process exited/i
+  let awaitingExit=false
+
+  const els = {
+    version: document.getElementById('info-version'),
+    java:    document.getElementById('info-java'),
+    uptime:  document.getElementById('info-uptime'),
+    public:  document.getElementById('info-public'),
+    local:   document.getElementById('info-local'),
+    port:    document.getElementById('info-port'),
+    motd:    document.getElementById('info-motd'),
+    online:  document.getElementById('info-online'),
+  }
+
+  const eulaRe=/You need to agree to the EULA/i
+  const readyRe=/\[Server thread\/INFO\]: Done/i
+  const errorRe=/(Exception|Error:|UnsupportedClassVersionError|Could not find or load main class|Address already in use|A fatal error has been detected|Failed|Failure)/i
+  let lastStatus='init'
+  let currentPlayer=null
+  let currentAnchor=null
+
+  const opsSet=new Set()
+  function refreshOps(){
+    fetch('/ops').then(r=>r.ok?r.json():[]).then(list=>{
+      opsSet.clear()
+      ;(list||[]).forEach(n=>opsSet.add(typeof n==='string'?n:(n&&n.name?n.name:'')))
+    }).catch(()=>{})
+  }
+
+  function avatarSrcFor(player){
+    const uuid=(typeof player==='object'&&player&&player.uuid)?player.uuid:null
+    if(uuid) return 'https://mc-heads.net/avatar/'+uuid+'/24'
+    const name=typeof player==='string'?player:(player&&player.name?player.name:'steve')
+    return 'https://mc-heads.net/avatar/'+encodeURIComponent(name)+'/24'
+  }
+
+  function isOp(player){
+    if(typeof player==='object'&&player&&typeof player.op==='boolean') return player.op
+    const name=typeof player==='string'?player:(player&&player.name?player.name:'')
+    return opsSet.has(name)
+  }
+
+  function truncateName(name,maxLen){
+    if(!name) return ''
+    if(name.length<=maxLen) return name
+    return name.slice(0,Math.max(0,maxLen-1))+'…'
+  }
 
   function toast(title,msg,type,actions){
     const t=document.createElement('div')
@@ -213,17 +270,84 @@ document.addEventListener('DOMContentLoaded',()=> {
     return ''
   }
 
+  function appendLine(line){
+    const div=document.createElement('div')
+    div.className=colorize(line)
+    div.textContent=line
+    consoleEl.appendChild(div)
+  }
+
   let autoScroll=true
   consoleEl.addEventListener('scroll',()=>{
     const nearBottom=(consoleEl.scrollTop+consoleEl.clientHeight)>=consoleEl.scrollHeight-8
     autoScroll=nearBottom
   })
 
+  let lastCount=0
+  let livePaused=false
+  let pending=[]
+
+  function selectionInsideConsole(){
+    const sel=window.getSelection()
+    if(!sel||sel.isCollapsed||sel.rangeCount===0) return false
+    const r=sel.getRangeAt(0)
+    return consoleEl.contains(r.startContainer)&&consoleEl.contains(r.endContainer)
+  }
+
+  function applyPending(){
+    if(!pending.length) return
+    const frag=document.createDocumentFragment()
+    for(const line of pending){ const div=document.createElement('div'); div.className=colorize(line); div.textContent=line; frag.appendChild(div) }
+    consoleEl.appendChild(frag)
+    pending.length=0
+    if(autoScroll) consoleEl.scrollTop=consoleEl.scrollHeight
+  }
+
+  document.addEventListener('selectionchange',()=>{
+    const active=selectionInsideConsole()
+    if(active){ livePaused=true; return }
+    if(livePaused&&!active){ livePaused=false; applyPending() }
+  })
+
+  function showEula(){ eulaBtn.classList.add('show') }
+  function hideEula(){ eulaBtn.classList.remove('show') }
+  hideEula()
+
+  eulaBtn.addEventListener('click', ()=>{
+    fetch('/accept-eula',{method:'POST'})
+      .then(r=>r.text())
+      .then(()=> toast('EULA','Accepted. Restart the server to apply.','ok'))
+      .catch(()=> toast('EULA','Failed to accept.','err'))
+  })
+
   function fetchConsole(){
     fetch('/get-console-output').then(r=>r.json()).then(data=>{
-      const wasAtBottom=autoScroll
-      consoleEl.innerHTML=data.map(line=>'<span class="'+colorize(line)+'">'+line.replace(/</g,'&lt;')+'</span>').join('\n')
-      if(wasAtBottom) consoleEl.scrollTop=consoleEl.scrollHeight
+      if(lastCount===0&&consoleEl.childNodes.length===0){
+        const frag=document.createDocumentFragment()
+        for(const line of data){ const div=document.createElement('div'); div.className=colorize(line); div.textContent=line; frag.appendChild(div) }
+        consoleEl.appendChild(frag)
+        lastCount=data.length
+        consoleEl.scrollTop=consoleEl.scrollHeight
+        return
+      }
+      if(data.length>lastCount){
+        const inc=data.slice(lastCount)
+        lastCount=data.length
+        if(inc.some(l=>eulaRe.test(l))) showEula()
+        if(inc.some(l=>readyRe.test(l))) hideEula()
+        if(inc.some(l=>exitRe.test(l))){
+          awaitingExit=false
+          setButtonsForRunning(false)
+          statusText.textContent='Stopped'
+          dot.classList.remove('running')
+          dot.classList.add('stopped')
+        }
+        if(livePaused){ pending.push(...inc); return }
+        const frag=document.createDocumentFragment()
+        for(const line of inc){ const div=document.createElement('div'); div.className=colorize(line); div.textContent=line; frag.appendChild(div) }
+        consoleEl.appendChild(frag)
+        if(autoScroll) consoleEl.scrollTop=consoleEl.scrollHeight
+      }
     })
   }
 
@@ -231,49 +355,178 @@ document.addEventListener('DOMContentLoaded',()=> {
     const cmd=inputEl.value.trim()
     if(!cmd) return
     fetch('/send-command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})})
-    .then(r=>r.json()).then(()=>{inputEl.value=''})
+      .then(r=>r.json()).then(()=>{inputEl.value=''})
+  }
+  sendBtn.onclick=sendCommand
+  inputEl.addEventListener('keydown',e=>{if(e.key==='Enter')sendCommand()})
+
+  function setButtonsForRunning(running){
+    if(running){
+      startBtn.classList.add('disabled')
+      startBtn.classList.remove('primary')
+      startBtn.disabled=true
+      stopBtn.classList.add('primary')
+      stopBtn.classList.remove('disabled')
+      stopBtn.disabled=false
+    }else{
+      stopBtn.classList.add('disabled')
+      stopBtn.classList.remove('primary')
+      stopBtn.disabled=true
+      startBtn.classList.add('primary')
+      startBtn.classList.remove('disabled')
+      startBtn.disabled=false
+    }
   }
 
   function updateStatus(){
     fetch('/server-status').then(r=>r.json()).then(s=>{
-      const running=!!s.running
-      statusText.textContent=running?'Running':'Stopped'
+      const st=s.status
+      statusText.textContent=st.charAt(0).toUpperCase()+st.slice(1)
+      const running=(st==='running')
       dot.classList.toggle('running',running)
       dot.classList.toggle('stopped',!running)
-      startBtn.disabled=running
-      stopBtn.disabled=!running
+      if(running){
+        setButtonsForRunning(true)
+        awaitingExit=false
+      }else{
+        if(!awaitingExit) setButtonsForRunning(false)
+      }
+      if(lastStatus!=='crashed'&&st==='crashed'){
+        toast('Server Crashed','The server process is no longer running','err')
+      }
+      lastStatus=st
     })
   }
+
+  function sendAction(act,player,extra){
+    fetch('/'+act,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({player},extra||{}))})
+      .then(r=>r.json()).then(()=>toast('Action',act+' sent','ok')).catch(()=>toast('Action','Failed','err'))
+  }
+
+  function renderPlayerRow(player){
+    const rawName=typeof player==='string'?player:(player&&player.name?player.name:'')
+    const shortName=truncateName(rawName,16)
+    const op=isOp(player)
+    const row=document.createElement('div')
+    row.className='player'
+    row.innerHTML='<div style="display:flex;align-items:center;gap:10px"><img class="head" alt="" width="24" height="24" style="border-radius:4px;image-rendering:pixelated"><span class="name" title="'+rawName+'">'+shortName+'</span>'+(op?'<span aria-label="OP" title="Operator" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#1b2a1f;border:1px solid #27422f;font-size:12px">★</span>':'')+'</div><button class="more-btn" aria-haspopup="true" aria-expanded="false"><span class="material-icons" style="font-size:18px;opacity:.8">more_vert</span></button>'
+    const img=row.querySelector('img.head')
+    img.src=avatarSrcFor(player)
+    img.referrerPolicy='no-referrer'
+    img.decoding='async'
+    return row
+  }
+
+  function closeDropdown(){
+    dropdown.classList.remove('show')
+    dropdown.setAttribute('aria-hidden','true')
+    currentPlayer=null
+    currentAnchor=null
+  }
+
+  function buildDropdown(){
+    dropdown.innerHTML = `
+      <button class="menu-item" data-act="kick">Kick</button>
+      <button class="menu-item" data-act="ban">Ban</button>
+      <button class="menu-item" data-act="op">OP</button>
+      <button class="menu-item" data-act="kill">Kill</button>
+      <button class="menu-item" data-act="pardon">Pardon</button>
+      <button class="menu-item" data-act="deop">DeOP</button>
+    `
+  }
+
+  function positionDropdown(anchorBtn){
+    dropdown.style.visibility='hidden'
+    dropdown.classList.add('show')
+    const rect = anchorBtn.getBoundingClientRect()
+    const pad = 6
+    const dw = dropdown.offsetWidth
+    const left = Math.max(12, rect.right - dw)
+    const top = rect.bottom + pad
+    dropdown.style.left = left + 'px'
+    dropdown.style.top = top + 'px'
+    dropdown.style.visibility='visible'
+  }
+
+  playersEl.addEventListener('click', e=>{
+    const btn = e.target.closest('.more-btn')
+    if(btn){
+      const row = btn.closest('.player')
+      const name = row.querySelector('.name').textContent.replace(/…$/,'')
+      if(currentPlayer === name && dropdown.classList.contains('show')){
+        closeDropdown()
+        return
+      }
+      currentPlayer = name
+      currentAnchor = btn
+      buildDropdown()
+      positionDropdown(btn)
+      dropdown.setAttribute('aria-hidden','false')
+      dropdown.classList.add('show')
+      return
+    }
+  })
+
+  dropdown.addEventListener('click', e=>{
+    const item = e.target.closest('.menu-item')
+    if(!item || !currentPlayer) return
+    const act = item.dataset.act
+    if(act==='kick') sendAction('kick',currentPlayer,{reason:'Kicked by Admin'})
+    else if(act==='ban') sendAction('ban',currentPlayer,{reason:'Banned by Admin'})
+    else if(act==='op') sendAction('op',currentPlayer)
+    else if(act==='kill') sendAction('kill',currentPlayer)
+    else if(act==='pardon') sendAction('pardon',currentPlayer)
+    else if(act==='deop') sendAction('deop',currentPlayer)
+    closeDropdown()
+  })
+
+  document.addEventListener('click', e=>{
+    if(dropdown.classList.contains('show')){
+      const clickedInsideDropdown = e.target.closest('#player-dropdown')
+      const clickedAnchor = e.target.closest('.more-btn')
+      if(!clickedInsideDropdown && (!clickedAnchor || clickedAnchor!==currentAnchor)){
+        closeDropdown()
+      }
+    }
+  })
+
+  window.addEventListener('resize', closeDropdown)
+  window.addEventListener('scroll', closeDropdown, true)
 
   function updatePlayers(){
     fetch('/get-players').then(r=>r.json()).then(list=>{
       playersEl.innerHTML=''
-      list.forEach(p=>{
-        const row=document.createElement('div')
-        row.className='player'
-        row.innerHTML='<span class="name">'+p+'</span><span class="material-icons" style="opacity:.7">more_vert</span>'
-        row.onclick=()=>openPlayerModal(p)
-        playersEl.appendChild(row)
-      })
+      list.forEach(p=>playersEl.appendChild(renderPlayerRow(p)))
       playersEmpty.style.display=list.length? 'none':'block'
+      const names=list.map(x=>typeof x==='string'?x:(x&&x.name?x.name:'')) 
+      if(currentPlayer && !names.includes(currentPlayer)) closeDropdown()
     })
   }
 
-  function openPlayerModal(name){
-    pamTitle.textContent=name
-    pam.style.display='flex'
-    pam.dataset.player=name
+  function set(el, val){ el.textContent = (val ?? '—') }
+
+  function fetchServerInfo(){
+    fetch('/server-info')
+      .then(r=>r.json())
+      .then(info=>{
+        set(els.version, info.mc_version || 'Unknown')
+        set(els.java, info.java_version || 'Unknown')
+        set(els.uptime, info.uptime_human || '—')
+        set(els.public, info.public_ip || '—')
+        set(els.local, info.local_ip || '—')
+        set(els.port, info.port || '—')
+        set(els.motd, info.motd || '—')
+        set(els.online, info.online_mode === true ? 'true' : (info.online_mode === false ? 'false' : '—'))
+      })
   }
-  function closePam(){pam.style.display='none'}
 
   let watcher=null
   let baselineCount=0
-  const readyRe=/\[Server thread\/INFO\]: Done/i
-  const errorRe=/(Exception|Error:|UnsupportedClassVersionError|Could not find or load main class|Address already in use|A fatal error has been detected|Failed|Failure)/i
 
   function getLines(){
-    const text=consoleEl.textContent||''
-    return text.split('\n')
+    const lines=[]
+    consoleEl.childNodes.forEach(n=>{ if(n.nodeType===1) lines.push(n.textContent||'') })
+    return lines
   }
 
   function startWatching(){
@@ -302,8 +555,6 @@ document.addEventListener('DOMContentLoaded',()=> {
     if(watcher){ clearInterval(watcher); watcher=null }
   }
 
-  document.getElementById('refresh-status').onclick=updateStatus
-
   startBtn.onclick=()=>{
     fetch('/start')
       .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.text() })
@@ -312,36 +563,25 @@ document.addEventListener('DOMContentLoaded',()=> {
   }
 
   stopBtn.onclick=()=>{
-    fetch('/stop').then(r=>r.json()).then(j=>{toast('Stopped',j.message||'Server stopped','ok')}).catch(()=>toast('Error','Failed to stop','err'))
+    awaitingExit=true
+    fetch('/stop').then(r=>r.json()).then(j=>{toast('Stopping',j.message||'Stopping server','ok')}).catch(()=>toast('Error','Failed to stop','err'))
     stopWatching()
     startModal.style.display='none'
   }
 
-  downloadBtn.onclick=()=>{
-    fetch('/download-server').then(r=>{if(!r.ok) throw new Error(); return r.blob()}).then(b=>{
-      const url=URL.createObjectURL(b);const a=document.createElement('a');a.href=url;a.download='minecraft_server.jar';document.body.appendChild(a);a.click();URL.revokeObjectURL(url);a.remove()
-    })
-  }
-
-  eulaBtn.onclick=()=>{
-    fetch('/accept-eula',{method:'POST'}).then(r=>r.text()).then(t=>toast('EULA',t,'ok')).catch(()=>toast('EULA','Failed','err'))
-  }
-
-  sendBtn.onclick=sendCommand
-  inputEl.addEventListener('keypress',e=>{if(e.key==='Enter') sendCommand()})
-
-  pamClose.onclick=closePam
-  pam.addEventListener('click',e=>{if(e.target===pam) closePam()})
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePam();startModal.style.display='none';stopWatching()}})
+  function onSocketDrop(){}
 
   setInterval(fetchConsole,300)
   setInterval(updateStatus,800)
   setInterval(updatePlayers,1000)
+  setInterval(fetchServerInfo,10000)
+  setInterval(refreshOps,5000)
 
   updateStatus()
   updatePlayers()
   fetchConsole()
+  fetchServerInfo()
+  refreshOps()
 })
 </script>
-</body>
-</html>
+{% endblock %}

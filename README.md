@@ -49,7 +49,7 @@ pip install --upgrade pip
 pip install flask flask-socketio python-socketio[client] eventlet requests werkzeug flask-cors
 
 # 5) First run (dev mode)
-python app.py
+python3 Server.py
 ```
 
 Open the dashboard at: `http://<your-server-ip>:5003`

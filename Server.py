@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from flask import Flask, render_template, jsonify, request, redirect, url_for, send_file, session
 from werkzeug.security import generate_password_hash, check_password_hash
+import base64, hashlib, hmac
 
 try:
     import requests  
@@ -106,15 +107,11 @@ def login():
         u = users.get(username)
         if not u or not isinstance(u, dict) or 'password' not in u:
             return render_template('login.html', error='Invalid credentials')
-        try:
-            ok = verify_hash(u.get('password',''), password)
-        except Exception:
-            return render_template('login.html', error='Password hash type not supported on this server')
-        if not ok:
-            if username == 'admin' and os.environ.get('ALLOW_ADMIN_1234_FALLBACK') == '1' and password == '1234':
-                users['admin']['password'] = gen_hash('1234')
-                save_users(users)
-                ok = True
+        ok = verify_hash(u.get('password',''), password)
+        if not ok and username == 'admin' and os.environ.get('ALLOW_ADMIN_1234_FALLBACK') == '1' and password == '1234':
+            users['admin']['password'] = gen_hash('1234')
+            save_users(users)
+            ok = True
         if not ok:
             return render_template('login.html', error='Invalid credentials')
         if u.get('must_change'):
@@ -200,6 +197,19 @@ def gen_hash(pw: str) -> str:
     return generate_password_hash(pw, method=HASH_METHOD)
 
 def verify_hash(stored: str, pw: str) -> bool:
+    if isinstance(stored, str) and stored.startswith('scrypt:'):
+        try:
+            _, rest = stored.split(':', 1)
+            params, salt_b64, hash_hex = rest.split('$', 2)
+            n_str, r_str, p_str = params.split(':')
+            n = int(n_str); r = int(r_str); p = int(p_str)
+            salt = base64.b64decode(salt_b64.encode('utf-8'))
+            expected = bytes.fromhex(hash_hex)
+            dklen = len(expected)
+            derived = hashlib.scrypt(pw.encode('utf-8'), salt=salt, n=n, r=r, p=p, dklen=dklen)
+            return hmac.compare_digest(derived, expected)
+        except Exception:
+            return False
     return check_password_hash(stored, pw)
 
 def ensure_users_file():
@@ -236,7 +246,7 @@ def save_users(users):
 
 def ensure_default_admin():
     users = load_users()
-    if 'admin' not in users or not isinstance(users.get('admin'), dict):
+    if 'admin' not in users or not isinstance(users.get('admin'), dict) or 'password' not in users['admin']:
         users['admin'] = {'password': gen_hash('1234'), 'must_change': True}
         save_users(users)
 

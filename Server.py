@@ -29,6 +29,7 @@ app = Flask(
 app.config['SECRET_KEY'] = 'geheim!'
 socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=25, ping_interval=20, async_mode="threading")
 CORS(app, resources={r"/fs-*": {"origins": "*"}})
+HASH_METHOD = os.environ.get('HASH_METHOD', 'pbkdf2:sha256')
 
 BOOL_KEYS = {
     'allow-flight','allow-nether','broadcast-console-to-ops','broadcast-rcon-to-ops','enable-command-block',
@@ -103,7 +104,18 @@ def login():
         password = request.form.get('password') or ''
         users = load_users()
         u = users.get(username)
-        if not u or not check_password_hash(u.get('password',''), password):
+        if not u or not isinstance(u, dict) or 'password' not in u:
+            return render_template('login.html', error='Invalid credentials')
+        try:
+            ok = verify_hash(u.get('password',''), password)
+        except Exception:
+            return render_template('login.html', error='Password hash type not supported on this server')
+        if not ok:
+            if username == 'admin' and os.environ.get('ALLOW_ADMIN_1234_FALLBACK') == '1' and password == '1234':
+                users['admin']['password'] = gen_hash('1234')
+                save_users(users)
+                ok = True
+        if not ok:
             return render_template('login.html', error='Invalid credentials')
         if u.get('must_change'):
             session.clear()
@@ -131,7 +143,7 @@ def change_password():
         users = load_users()
         if who not in users:
             return redirect(url_for('login'))
-        users[who]['password'] = generate_password_hash(p1)
+        users[who]['password'] = gen_hash(p1)
         users[who]['must_change'] = False
         save_users(users)
         session.clear()
@@ -184,15 +196,36 @@ def jar_status():
 
 # -------------------------- Helpers --------------------------
 
-def load_users():
+def gen_hash(pw: str) -> str:
+    return generate_password_hash(pw, method=HASH_METHOD)
+
+def verify_hash(stored: str, pw: str) -> bool:
+    return check_password_hash(stored, pw)
+
+def ensure_users_file():
     os.makedirs(app.instance_path, exist_ok=True)
     if not os.path.exists(USERS_FILE):
-        return {}
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        try:
-            return json.load(f)
-        except Exception:
-            return {}
+        users = {'admin': {'password': gen_hash('1234'), 'must_change': True}}
+        save_users(users)
+
+def load_users():
+    ensure_users_file()
+    try:
+        with open(USERS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError('bad format')
+            return data
+    except Exception:
+        users = {'admin': {'password': gen_hash('1234'), 'must_change': True}}
+        save_users(users)
+        return users
+
+def reset_admin_if_env():
+    if os.environ.get('RESET_ADMIN') == '1':
+        users = load_users()
+        users['admin'] = {'password': gen_hash('1234'), 'must_change': True}
+        save_users(users)
 
 def save_users(users):
     os.makedirs(app.instance_path, exist_ok=True)
@@ -203,14 +236,13 @@ def save_users(users):
 
 def ensure_default_admin():
     users = load_users()
-    if 'admin' not in users:
-        users['admin'] = {
-            'password': generate_password_hash('1234'),
-            'must_change': True
-        }
+    if 'admin' not in users or not isinstance(users.get('admin'), dict):
+        users['admin'] = {'password': gen_hash('1234'), 'must_change': True}
         save_users(users)
 
+ensure_users_file()
 ensure_default_admin()
+reset_admin_if_env()
 
 @app.before_request
 def require_login():

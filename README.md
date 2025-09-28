@@ -1,83 +1,124 @@
 # Minecraft Server Panel + Reverse Proxy
 
-This project is a **Flask-based Minecraft server control panel** with built-in login, file browser, settings editor, console output, and server start/stop functionality.  
-An install script is included that:
+This project is a **Flask-based Minecraft server control panel** with login, file browser, settings editor, live console, and server control (start/stop).  
+It also includes an install script to set up **systemd**, **Nginx reverse proxy** for the web panel, and **Nginx TCP stream proxy** so Minecraft clients can connect.
 
-- Sets up Python dependencies in a virtualenv
-- Installs and configures **systemd** to run the panel automatically
-- Configures **Nginx** as a reverse proxy for the panel (with optional HTTPS via Let’s Encrypt)
-- Configures **Nginx TCP stream proxy** so Minecraft (port 25565) is accessible externally
+Repository: https://github.com/Migrim/Minecraft-Server-Dashboard
 
 ---
 
-## 🚀 Installation
-
-### 1. Copy files to your server
-Upload the project (including `app.py`, templates, and static folders) to your server.  
-For example, place it in `/root/mc-panel/`.
-
-### 2. Run the installer
-From inside the project folder:
+## 📥 Download & Setup
 
 ```bash
-sudo bash install_mc_panel.sh
+# (Optional) on your local machine:
+git clone https://github.com/Migrim/Minecraft-Server-Dashboard.git
+cd Minecraft-Server-Dashboard
+
+# Or directly on the server:
+cd /root
+git clone https://github.com/Migrim/Minecraft-Server-Dashboard.git mc-panel
+cd mc-panel
 ```
 
-The script will:
+If you already have the project files locally, just upload them to your server (e.g. via SCP, rsync, FTP).
 
-- Install required packages (`python3`, `nginx`, etc.)
-- Create a service user (`mcsvc`)
-- Set up the app in `/opt/mc-panel`
-- Configure Nginx for the web panel and Minecraft reverse proxy
-- Enable and start the systemd service (`mc-panel.service`)
+---
 
-### 3. (Optional) Enable HTTPS
-Before running the script, export your domain and email:
+## ⚙️ Adjusting the Installer Script
+
+The script (`install_mc_panel.sh`) has a few variables you may want to change before running it:
+
+```bash
+APP_DIR="/opt/mc-panel"   # Directory where the app will be installed
+APP_USER="mcsvc"          # System user that will run the app
+APP_PORT="5003"           # Internal Flask port (do not expose directly)
+MC_PORT="25565"           # Minecraft port (clients will connect here)
+```
+
+- Change **`APP_DIR`** if you want the app somewhere else (default is `/opt/mc-panel`).  
+- Change **`APP_USER`** if you want a different system user than `mcsvc`.  
+- Change **`MC_PORT`** if you want Minecraft to run on a non-standard port.  
+- Keep **`APP_PORT`** as `5003` unless you know what you’re doing — Nginx proxies to it.  
+
+To edit:
+
+```bash
+nano install_mc_panel.sh
+```
+
+Save with **CTRL+O**, exit with **CTRL+X**.
+
+---
+
+## 🔐 (Optional) Enable HTTPS via Let’s Encrypt
+
+Before running the installer, define your domain and email:
 
 ```bash
 export DOMAIN=yourdomain.com
 export CERTBOT_EMAIL=you@example.com
+```
+
+Then run:
+
+```bash
 sudo bash install_mc_panel.sh
 ```
 
-The script will request a Let’s Encrypt SSL certificate and configure HTTPS automatically.
+The installer will automatically request a certificate from Let’s Encrypt and configure Nginx for HTTPS.
 
 ---
 
-## 🔧 Usage
+## 🚀 Run Installation
+
+```bash
+sudo bash install_mc_panel.sh
+```
+
+This will:
+
+- Install dependencies (`python3`, `nginx`, etc.)
+- Create the system user (`mcsvc`)
+- Move files to `/opt/mc-panel`
+- Set up a `systemd` service: **mc-panel**
+- Configure Nginx for:
+  - Web panel reverse proxy
+  - Minecraft TCP proxy (25565)
+- (Optional) Enable HTTPS if `DOMAIN` + `CERTBOT_EMAIL` are set
+
+---
+
+## 🚪 Usage & Access
 
 - **Web Panel:**  
-  Open in your browser at:  
   - `http://<server-ip>/`  
-  - or `https://<yourdomain.com>/` if HTTPS is enabled  
+  - or `https://<yourdomain.com>/` (if HTTPS enabled)
 
-- **Minecraft Server:**  
-  Connect using your Minecraft client:  
-  - `mc.yourdomain.com:25565`  
-  - or `<server-ip>:25565`
+- **Minecraft Server (client connection):**  
+  - `<server-ip>:25565`  
+  - or `yourdomain.com:25565`
 
-- **Login:**  
-  Default admin account:  
-  - **Username:** `admin`  
-  - **Password:** `1234` (you’ll be forced to change it on first login)
+- **Login (default):**  
+  - Username: `admin`  
+  - Password: `1234` (change on first login)
 
-- **Upload server.jar:**  
-  Go to the `/install` page in the panel and upload your `server.jar`.
+- **Upload `server.jar`:**  
+  Use the `/install` page in the panel.
 
 - **Accept EULA:**  
-  Use the “Accept EULA” button in the panel.
+  Click the “Accept EULA” button.
 
-- **Start server:**  
-  Click **Start** in the web panel. Logs and player joins will appear in the live console.
+- **Start Server:**  
+  Click **Start** in the panel.
 
 ---
 
 ## 🛠 Service Management
 
-The panel runs as a **systemd service** named `mc-panel`.
+The panel runs as a **systemd service**:
 
 ```bash
-# Check status
+# Status
 sudo systemctl status mc-panel
 
 # Start
@@ -86,51 +127,52 @@ sudo systemctl start mc-panel
 # Stop
 sudo systemctl stop mc-panel
 
-# Restart (after code changes)
+# Restart (after changes)
 sudo systemctl restart mc-panel
 ```
 
 ---
 
-## 🔒 Firewall
+## 🔥 Firewall
 
 The installer configures **ufw** to allow:
 
-- SSH (22/tcp)
-- HTTP (80/tcp)
-- HTTPS (443/tcp, if enabled)
-- Minecraft (25565/tcp)
+- SSH (22/tcp)  
+- HTTP (80/tcp)  
+- HTTPS (443/tcp)  
+- Minecraft (25565/tcp)  
 
 ---
 
-## 📂 Paths
+## 📂 Paths & Structure
 
-- **App directory:** `/opt/mc-panel`
-- **Virtualenv:** `/opt/mc-panel/venv`
-- **Minecraft server files:** `/opt/mc-panel/instance/server`
-- **User database:** `/opt/mc-panel/instance/users.json`
+- App root: `/opt/mc-panel`  
+- Virtualenv: `/opt/mc-panel/venv`  
+- Minecraft files: `/opt/mc-panel/instance/server`  
+- User database: `/opt/mc-panel/instance/users.json`  
+
+---
+
+## ⚠️ Requirements & Notes
+
+- Install **Java 21+** on the server:  
+  ```bash
+  sudo apt install openjdk-21-jdk -y
+  java -version
+  ```
+- Default memory allocation: `-Xmx1024M -Xms1024M` (edit in `app.py` → `start_server()`).  
+- Make sure port **25565** is open on your host/ISP firewall.  
+- If using a domain, set DNS A/AAAA record to your server’s IP before running Certbot.
 
 ---
 
 ## ✅ Tested On
 
-- Ubuntu 22.04 LTS
-- Debian 12 (Bookworm)
+- Ubuntu 22.04 LTS  
+- Debian 12 (Bookworm)  
 
 ---
 
-## ⚠️ Notes
+## 🎉 Final Notes
 
-- Make sure Java 21+ is installed on the server (Minecraft requires it).
-- The panel only starts the Minecraft server if `server.jar` is uploaded.
-- Default RAM is `-Xmx1024M -Xms1024M` (adjust in `start_server()` inside `app.py`).
-
----
-
-## 🎮 Connect & Enjoy
-
-Once installed, you can:
-
-- Manage the Minecraft server from your browser  
-- Let players connect via your **public IP or domain name**  
-- Keep the server running automatically in the background
+Once installed, you’ll have a **full Minecraft server control panel** running behind Nginx, accessible over HTTP(S), with Minecraft clients connecting via port `25565`.

@@ -1,236 +1,136 @@
-# Minecraft Server Dashboard (Flask + Socket.IO)
+# Minecraft Server Panel + Reverse Proxy
 
-A lightweight web dashboard to run and manage a standalone Minecraft Java server.  
-Works fully locally; no external services are required.
+This project is a **Flask-based Minecraft server control panel** with built-in login, file browser, settings editor, console output, and server start/stop functionality.  
+An install script is included that:
 
----
-
-## Features
-
-- Start/stop server and view live console output
-- Send commands and moderate players (op, deop, kick, ban, pardon, kill)
-- Edit and save `server.properties` via UI with sane types
-- Browse, download, delete, and edit files inside the server directory
-- Login system with default admin and mandatory first password change
-- Auto-detect Java + Minecraft version, show uptime, local/public IP
-- Simple first-time flow to upload your `server.jar` from the browser
+- Sets up Python dependencies in a virtualenv
+- Installs and configures **systemd** to run the panel automatically
+- Configures **Nginx** as a reverse proxy for the panel (with optional HTTPS via Let’s Encrypt)
+- Configures **Nginx TCP stream proxy** so Minecraft (port 25565) is accessible externally
 
 ---
 
-## Requirements
+## 🚀 Installation
 
-- Ubuntu 22.04/24.04 (or compatible)
-- Git
-- Python 3.10+ with `venv` and `pip`
-- **Java 21+** runtime (OpenJDK 21 recommended)
+### 1. Copy files to your server
+Upload the project (including `app.py`, templates, and static folders) to your server.  
+For example, place it in `/root/mc-panel/`.
 
-> The dashboard **requires Java 21+** for the server process.  
-> If `java -version` prints < 21, update Java or set `JAVA_CMD` to a Java 21 binary.
-
----
-
-## Quick Start (Ubuntu)
+### 2. Run the installer
+From inside the project folder:
 
 ```bash
-# 1) System packages
-sudo apt update
-sudo apt install -y git python3-venv python3-pip openjdk-21-jre-headless
-
-# 2) Clone the repository
-git clone https://github.com/Migrim/Minecraft-Server-Dashboard.git
-cd Minecraft-Server-Dashboard
-
-# 3) Python virtualenv
-python3 -m venv venv
-source venv/bin/activate
-
-# 4) Install Python dependencies
-pip install --upgrade pip
-pip install flask flask-socketio python-socketio[client] eventlet requests werkzeug flask-cors
-
-# 5) First run (dev mode)
-python3 Server.py
+sudo bash install_mc_panel.sh
 ```
 
-Open the dashboard at: `http://<your-server-ip>:5003`
+The script will:
 
-Default login:  
-**Username:** `admin`  
-**Password:** `1234`  
-You’ll be asked to set a new password on first login.
+- Install required packages (`python3`, `nginx`, etc.)
+- Create a service user (`mcsvc`)
+- Set up the app in `/opt/mc-panel`
+- Configure Nginx for the web panel and Minecraft reverse proxy
+- Enable and start the systemd service (`mc-panel.service`)
+
+### 3. (Optional) Enable HTTPS
+Before running the script, export your domain and email:
+
+```bash
+export DOMAIN=yourdomain.com
+export CERTBOT_EMAIL=you@example.com
+sudo bash install_mc_panel.sh
+```
+
+The script will request a Let’s Encrypt SSL certificate and configure HTTPS automatically.
 
 ---
 
-## First-Time Server Setup
+## 🔧 Usage
 
-1. Visit `/install` or the **Install** page the first time you open the UI.
-2. Upload your Minecraft server `server.jar`.
-3. Accept the Minecraft EULA from the UI or by editing `instance/server/eula.txt` to `eula=true`.
-4. Start the server from the dashboard.
+- **Web Panel:**  
+  Open in your browser at:  
+  - `http://<server-ip>/`  
+  - or `https://<yourdomain.com>/` if HTTPS is enabled  
 
-Server files live in: `instance/server/`  
-The dashboard creates the `instance/` folder automatically next to `app.py`.
+- **Minecraft Server:**  
+  Connect using your Minecraft client:  
+  - `mc.yourdomain.com:25565`  
+  - or `<server-ip>:25565`
 
----
+- **Login:**  
+  Default admin account:  
+  - **Username:** `admin`  
+  - **Password:** `1234` (you’ll be forced to change it on first login)
 
-## Pull Updates from GitHub
+- **Upload server.jar:**  
+  Go to the `/install` page in the panel and upload your `server.jar`.
 
-From the repository directory:
+- **Accept EULA:**  
+  Use the “Accept EULA” button in the panel.
 
-```bash
-cd Minecraft-Server-Dashboard
-git pull
-# If dependencies changed:
-source venv/bin/activate
-pip install -r requirements.txt || true
-pip install flask flask-socketio python-socketio[client] eventlet requests werkzeug flask-cors
-```
-
-Restart your service/process after pulling updates.
-
----
-
-## Run as a Systemd Service
-
-### 1) Create a service unit
-
-```bash
-sudo tee /etc/systemd/system/mc-dashboard.service >/dev/null <<'UNIT'
-[Unit]
-Description=Minecraft Server Dashboard (Flask)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=%i
-WorkingDirectory=/home/%i/Minecraft-Server-Dashboard
-Environment=JAVA_CMD=/usr/bin/java
-Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/%i/Minecraft-Server-Dashboard/venv/bin/python app.py
-Restart=on-failure
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-```
-
-If your username is, for example, `ubuntu`, enable and run it **templated** with your user:
-
-```bash
-# Replace 'ubuntu' with your actual Linux username
-sudo systemctl enable mc-dashboard@ubuntu
-sudo systemctl start mc-dashboard@ubuntu
-sudo systemctl status mc-dashboard@ubuntu --no-pager
-```
-
-The app listens on port **5003**.
+- **Start server:**  
+  Click **Start** in the web panel. Logs and player joins will appear in the live console.
 
 ---
 
-## Optional: Reverse Proxy with Nginx
+## 🛠 Service Management
+
+The panel runs as a **systemd service** named `mc-panel`.
 
 ```bash
-sudo apt install -y nginx
-sudo tee /etc/nginx/sites-available/mc-dashboard >/dev/null <<'NGINX'
-server {
-    listen 80;
-    server_name _;
+# Check status
+sudo systemctl status mc-panel
 
-    location / {
-        proxy_pass http://127.0.0.1:5003;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-NGINX
-sudo ln -s /etc/nginx/sites-available/mc-dashboard /etc/nginx/sites-enabled/mc-dashboard
-sudo nginx -t && sudo systemctl reload nginx
-```
+# Start
+sudo systemctl start mc-panel
 
-Now open `http://<your-server-ip>/`.
+# Stop
+sudo systemctl stop mc-panel
 
----
-
-## Firewall
-
-If you access the dashboard directly (no reverse proxy):
-
-```bash
-sudo ufw allow 5003/tcp
-```
-
-If you use Nginx:
-
-```bash
-sudo ufw allow 80/tcp
+# Restart (after code changes)
+sudo systemctl restart mc-panel
 ```
 
 ---
 
-## Environment Variables
+## 🔒 Firewall
 
-- `JAVA_CMD`  
-  Path to the Java 21+ binary if it’s not `/usr/bin/java`. Example:
-  ```bash
-  export JAVA_CMD=/usr/lib/jvm/java-21-openjdk-amd64/bin/java
-  ```
+The installer configures **ufw** to allow:
 
----
-
-## Default Paths
-
-- Dashboard HTTP port: `5003`
-- Instance folder: `instance/`
-- Server files: `instance/server/`
-- Uploaded `server.jar` filename: `server.jar`
+- SSH (22/tcp)
+- HTTP (80/tcp)
+- HTTPS (443/tcp, if enabled)
+- Minecraft (25565/tcp)
 
 ---
 
-## Common Tasks
+## 📂 Paths
 
-- Start server: **Start** button in the UI or `GET /start`
-- Stop server: **Stop** button in the UI or `GET /stop`
-- Console output: auto-streamed to the dashboard
-- Players list: **Players** section or `GET /get-players`
-- Server status: `GET /server-status`
-- Server info: `GET /server-info`
-- Properties: edited via Settings page (writes to `instance/server/server.properties`)
+- **App directory:** `/opt/mc-panel`
+- **Virtualenv:** `/opt/mc-panel/venv`
+- **Minecraft server files:** `/opt/mc-panel/instance/server`
+- **User database:** `/opt/mc-panel/instance/users.json`
 
 ---
 
-## Troubleshooting
+## ✅ Tested On
 
-- **Java < 21 detected**  
-  Install OpenJDK 21 and ensure `java -version` shows 21+.  
-  Set `JAVA_CMD` if you have multiple Java versions installed.
-
-- **Cannot bind to port 5003**  
-  Make sure no other process is using 5003 or change the reverse proxy.
-
-- **No `server.jar` found redirect**  
-  Upload `server.jar` on `/install`.
-
-- **EULA not accepted**  
-  Accept via UI action or set `eula=true` in `instance/server/eula.txt`.
+- Ubuntu 22.04 LTS
+- Debian 12 (Bookworm)
 
 ---
 
-## Development
+## ⚠️ Notes
 
-```bash
-source venv/bin/activate
-python app.py
-```
-
-Runs with `debug=True` and `use_reloader=False` as set in `app.py`.
+- Make sure Java 21+ is installed on the server (Minecraft requires it).
+- The panel only starts the Minecraft server if `server.jar` is uploaded.
+- Default RAM is `-Xmx1024M -Xms1024M` (adjust in `start_server()` inside `app.py`).
 
 ---
 
-## License
+## 🎮 Connect & Enjoy
 
-MIT (see repository)
+Once installed, you can:
+
+- Manage the Minecraft server from your browser  
+- Let players connect via your **public IP or domain name**  
+- Keep the server running automatically in the background

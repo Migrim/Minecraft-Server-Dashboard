@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, send_file
+from flask import Flask, render_template, jsonify, request, redirect, url_for, send_file, session, g, flash
 from flask_socketio import SocketIO
 from threading import Thread
 import subprocess
@@ -13,12 +13,11 @@ import ipaddress
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
-from flask import Flask, render_template, jsonify, request, redirect, url_for, send_file, session
 from werkzeug.security import generate_password_hash, check_password_hash
-import base64, hashlib, hmac
+import base64, hashlib, hmac, sqlite3
 
 try:
-    import requests  
+    import requests
 except Exception:
     requests = None
 
@@ -50,7 +49,6 @@ console_output = []
 players = set()
 server_process = None
 SERVER_START_TS = None
-USERS_FILE = os.path.join(app.instance_path, 'users.json')
 
 JAVA_CMD = os.environ.get('JAVA_CMD', 'java')
 
@@ -60,6 +58,74 @@ jar_path = os.path.join(server_files_dir, jar_filename)
 
 os.makedirs(server_files_dir, exist_ok=True)
 
+DB_PATH = os.path.join(app.instance_path, 'users.db')
+
+def get_db():
+    if 'db' not in g:
+        os.makedirs(app.instance_path, exist_ok=True)
+        g.db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False)
+        g.db.row_factory = sqlite3.Row
+    return g.db
+
+@app.teardown_appcontext
+def close_db(exc):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    db = get_db()
+    db.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT NOT NULL, must_change INTEGER NOT NULL DEFAULT 0)')
+    db.commit()
+
+def gen_hash(pw: str) -> str:
+    return generate_password_hash(pw, method=HASH_METHOD)
+
+def verify_hash(stored: str, pw: str) -> bool:
+    if isinstance(stored, str) and stored.startswith('scrypt:'):
+        try:
+            _, rest = stored.split(':', 1)
+            params, salt_b64, hash_hex = rest.split('$', 2)
+            n_str, r_str, p_str = params.split(':')
+            n = int(n_str); r = int(r_str); p = int(p_str)
+            salt = base64.b64decode(salt_b64.encode('utf-8'))
+            expected = bytes.fromhex(hash_hex)
+            dklen = len(expected)
+            derived = hashlib.scrypt(pw.encode('utf-8'), salt=salt, n=n, r=r, p=p, dklen=dklen)
+            return hmac.compare_digest(derived, expected)
+        except Exception:
+            return False
+    return check_password_hash(stored, pw)
+
+def get_user(username: str):
+    db = get_db()
+    cur = db.execute('SELECT username, password, must_change FROM users WHERE username = ?', (username,))
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {'username': row['username'], 'password': row['password'], 'must_change': bool(row['must_change'])}
+
+def set_user_password(username: str, password: str, must_change: bool = False):
+    db = get_db()
+    ph = gen_hash(password)
+    db.execute(
+        'INSERT INTO users(username, password, must_change) VALUES(?,?,?) ON CONFLICT(username) DO UPDATE SET password=excluded.password, must_change=excluded.must_change',
+        (username, ph, 1 if must_change else 0)
+    )
+    db.commit()
+
+def set_must_change(username: str, must_change: bool):
+    db = get_db()
+    db.execute('UPDATE users SET must_change=? WHERE username=?', (1 if must_change else 0, username))
+    db.commit()
+
+def ensure_default_admin():
+    if not get_user('admin'):
+        set_user_password('admin', '1234', must_change=True)
+
+def reset_admin_if_env():
+    if os.environ.get('RESET_ADMIN') == '1':
+        set_user_password('admin', '1234', must_change=True)
 
 @app.before_request
 def ensure_jar_present():
@@ -71,7 +137,6 @@ def ensure_jar_present():
         'files','fs_tree','fs_open','fs_save','fs_download',
         'login','logout','change_password'
     }
-
     if ep in allowed_eps:
         return
     p = request.path or ''
@@ -79,23 +144,35 @@ def ensure_jar_present():
         return
     return redirect(url_for('install'))
 
+@app.before_request
+def require_login():
+    ep = request.endpoint or ''
+    p = request.path or ''
+    public_eps = {
+        'login','logout','change_password','static','install','upload_jar','jar_status','server_info'
+    }
+    if p.startswith('/static/'):
+        return
+    if ep in public_eps:
+        return
+    if not session.get('user'):
+        return redirect(url_for('login'))
+
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html')
-
 
 @app.route('/files')
 def files():
     return render_template('files.html')
 
-
 @app.route('/settings')
 def settings():
     return render_template('settings.html')
 
-
 @app.route('/panel-settings')
 def panel_settings():
+    flash('not implemented yet :3', 'info')
     return render_template('panel-settings.html')
 
 @app.route('/login', methods=['GET','POST'])
@@ -103,14 +180,12 @@ def login():
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
-        users = load_users()
-        u = users.get(username)
-        if not u or not isinstance(u, dict) or 'password' not in u:
+        u = get_user(username)
+        if not u:
             return render_template('login.html', error='Invalid credentials')
         ok = verify_hash(u.get('password',''), password)
         if not ok and username == 'admin' and os.environ.get('ALLOW_ADMIN_1234_FALLBACK') == '1' and password == '1234':
-            users['admin']['password'] = gen_hash('1234')
-            save_users(users)
+            set_user_password('admin', '1234', must_change=False)
             ok = True
         if not ok:
             return render_template('login.html', error='Invalid credentials')
@@ -137,12 +212,9 @@ def change_password():
         p2 = request.form.get('password2') or ''
         if len(p1) < 4 or p1 != p2:
             return render_template('change_password.html', error='Passwords must match and be at least 4 characters')
-        users = load_users()
-        if who not in users:
+        if not get_user(who):
             return redirect(url_for('login'))
-        users[who]['password'] = gen_hash(p1)
-        users[who]['must_change'] = False
-        save_users(users)
+        set_user_password(who, p1, must_change=False)
         session.clear()
         session['user'] = who
         return redirect(url_for('dashboard'))
@@ -150,14 +222,12 @@ def change_password():
 
 @app.route('/logout')
 def logout():
-    session.clear()
+    session.clear
     return redirect(url_for('login'))
-
 
 @app.route('/install')
 def install():
     return render_template('install.html', server_dir=server_files_dir, expected=jar_filename)
-
 
 @app.route('/upload-jar', methods=['POST'])
 def upload_jar():
@@ -178,7 +248,6 @@ def upload_jar():
     os.replace(tmp, final_path)
     return jsonify({'ok': True, 'path': final_path})
 
-
 @app.route('/jar-status')
 def jar_status():
     exists = os.path.isfile(jar_path)
@@ -189,84 +258,6 @@ def jar_status():
         'exists': exists,
         'status': status
     })
-
-
-# -------------------------- Helpers --------------------------
-
-def gen_hash(pw: str) -> str:
-    return generate_password_hash(pw, method=HASH_METHOD)
-
-def verify_hash(stored: str, pw: str) -> bool:
-    if isinstance(stored, str) and stored.startswith('scrypt:'):
-        try:
-            _, rest = stored.split(':', 1)
-            params, salt_b64, hash_hex = rest.split('$', 2)
-            n_str, r_str, p_str = params.split(':')
-            n = int(n_str); r = int(r_str); p = int(p_str)
-            salt = base64.b64decode(salt_b64.encode('utf-8'))
-            expected = bytes.fromhex(hash_hex)
-            dklen = len(expected)
-            derived = hashlib.scrypt(pw.encode('utf-8'), salt=salt, n=n, r=r, p=p, dklen=dklen)
-            return hmac.compare_digest(derived, expected)
-        except Exception:
-            return False
-    return check_password_hash(stored, pw)
-
-def ensure_users_file():
-    os.makedirs(app.instance_path, exist_ok=True)
-    if not os.path.exists(USERS_FILE):
-        users = {'admin': {'password': gen_hash('1234'), 'must_change': True}}
-        save_users(users)
-
-def load_users():
-    ensure_users_file()
-    try:
-        with open(USERS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if not isinstance(data, dict):
-                raise ValueError('bad format')
-            return data
-    except Exception:
-        users = {'admin': {'password': gen_hash('1234'), 'must_change': True}}
-        save_users(users)
-        return users
-
-def reset_admin_if_env():
-    if os.environ.get('RESET_ADMIN') == '1':
-        users = load_users()
-        users['admin'] = {'password': gen_hash('1234'), 'must_change': True}
-        save_users(users)
-
-def save_users(users):
-    os.makedirs(app.instance_path, exist_ok=True)
-    tmp = USERS_FILE + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(users, f)
-    os.replace(tmp, USERS_FILE)
-
-def ensure_default_admin():
-    users = load_users()
-    if 'admin' not in users or not isinstance(users.get('admin'), dict) or 'password' not in users['admin']:
-        users['admin'] = {'password': gen_hash('1234'), 'must_change': True}
-        save_users(users)
-
-ensure_users_file()
-ensure_default_admin()
-reset_admin_if_env()
-
-@app.before_request
-def require_login():
-    ep = request.endpoint or ''
-    p = request.path or ''
-    public_eps = {
-        'login','logout','change_password','static','install','upload_jar','jar_status','server_info'
-    }
-    if p.startswith('/static/'):
-        return
-    if ep in public_eps:
-        return
-    if not session.get('user'):
-        return redirect(url_for('login'))
 
 def server_root():
     return server_files_dir
@@ -460,7 +451,6 @@ def human_duration(seconds: float) -> str:
     parts.append(f"{s}s")
     return " ".join(parts)
 
-
 def read_properties(path):
     props = {}
     if not os.path.exists(path):
@@ -475,16 +465,13 @@ def read_properties(path):
                 props[k.strip()] = v.strip()
     return props
 
-
 def get_mc_version_from_logs():
-    # looks for lines like: "Starting minecraft server version 1.20.6"
     pattern = re.compile(r"Starting minecraft server version\s+([^\s]+)", re.I)
-    for line in reversed(console_output[-500:]):  # last 500 lines
+    for line in reversed(console_output[-500:]):
         m = pattern.search(line.replace('ඞ', ''))
         if m:
             return m.group(1)
     return None
-
 
 def get_java_version_string():
     try:
@@ -495,10 +482,8 @@ def get_java_version_string():
     except Exception:
         return None
 
-
 def get_local_ip():
     try:
-        # create a UDP socket to a public address (no traffic actually sent)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
@@ -510,12 +495,9 @@ def get_local_ip():
         except Exception:
             return None
 
-
 PUBLIC_IP_CACHE = {"ip": None, "ts": 0}
 
-
 def get_public_ip(timeout=1.5):
-    # cache for 60s
     now = time.time()
     if PUBLIC_IP_CACHE["ip"] and (now - PUBLIC_IP_CACHE["ts"] < 60):
         return PUBLIC_IP_CACHE["ip"]
@@ -533,7 +515,7 @@ def get_public_ip(timeout=1.5):
             if r.ok:
                 text = r.text.strip()
                 try:
-                    ipaddress.ip_address(text)  # validate IPv4/IPv6
+                    ipaddress.ip_address(text)
                     ip = text
                     break
                 except Exception:
@@ -544,11 +526,9 @@ def get_public_ip(timeout=1.5):
     PUBLIC_IP_CACHE["ts"] = now
     return ip
 
-
 def is_process_alive():
     global server_process
     return bool(server_process and server_process.poll() is None)
-
 
 def is_port_open(host='127.0.0.1', port=25565, timeout=0.2):
     try:
@@ -557,12 +537,10 @@ def is_port_open(host='127.0.0.1', port=25565, timeout=0.2):
     except Exception:
         return False
 
-
 def save_server_status(status):
     status_path = os.path.join(app.instance_path, 'server_status.json')
     with open(status_path, 'w') as f:
         json.dump({'server_running': status}, f)
-
 
 def read_server_status():
     status_path = os.path.join(app.instance_path, 'server_status.json')
@@ -570,7 +548,6 @@ def read_server_status():
         with open(status_path, 'r') as f:
             return json.load(f).get('server_running', False)
     return False
-
 
 def java_major():
     try:
@@ -581,9 +558,6 @@ def java_major():
     except Exception:
         return None
 
-
-# -------------------------- Server control --------------------------
-
 def start_server():
     global server_process, SERVER_START_TS
     if not os.path.isfile(jar_path):
@@ -593,8 +567,7 @@ def start_server():
         console_output.append('Error: Java not found. Install Java 21+ or set JAVA_CMD.')
         return
     if ver < 21:
-        console_output.append(f'Error: Java {ver} detected. This server requires Java 21+. '
-                              f'Install Java 21 and set JAVA_CMD or upgrade PATH.')
+        console_output.append(f'Error: Java {ver} detected. This server requires Java 21+. Install Java 21 and set JAVA_CMD or upgrade PATH.')
         return
     save_server_status(True)
     if server_process is None or server_process.poll() is not None:
@@ -607,17 +580,15 @@ def start_server():
                 text=True,
                 cwd=server_files_dir
             )
-            SERVER_START_TS = time.time()  # mark start time on successful spawn
+            SERVER_START_TS = time.time()
             threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
         except Exception as e:
             console_output.append(f"Server start error: {e}")
-
 
 @app.route('/start')
 def start_minecraft_server():
     Thread(target=start_server, daemon=True).start()
     return "Minecraft Server wird gestartet..."
-
 
 def stop_server_async():
     global server_process
@@ -638,7 +609,6 @@ def stop_server_async():
         finally:
             server_process = None
 
-
 @app.route('/stop')
 def stop_minecraft_server():
     global server_process
@@ -649,14 +619,12 @@ def stop_minecraft_server():
     else:
         return jsonify({"error": "Minecraft Server is not running."}), 400
 
-
 def emit_server_output(process):
     global console_output, players, server_process, SERVER_START_TS
     for line in iter(process.stdout.readline, ''):
         line_display = line.replace('<', 'ඞ').replace('>', 'ඞ')
         console_output.append(line_display)
         socketio.emit('server_output', {'data': line_display})
-
         join_match = re.search(r"\[Server thread/INFO\]: (\w+) joined the game", line)
         if join_match:
             players.add(join_match.group(1))
@@ -665,7 +633,6 @@ def emit_server_output(process):
             players.discard(leave_match.group(1))
         if "Stopping server" in line:
             players.clear()
-
     rc = process.poll()
     save_server_status(False)
     players.clear()
@@ -673,9 +640,6 @@ def emit_server_output(process):
     SERVER_START_TS = None
     console_output.append(f"Server process exited with code {rc}")
     socketio.emit('server_output', {'data': f"Server process exited with code {rc}"})
-
-
-# -------------------------- API Routes --------------------------
 
 @app.route('/send-command', methods=['POST'])
 def send_command():
@@ -692,7 +656,6 @@ def send_command():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 def send_server_command(command):
     global server_process, console_output
     try:
@@ -707,13 +670,11 @@ def send_server_command(command):
         console_output.append(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/ban', methods=['POST'])
 def ban_player():
     player = request.json['player']
     reason = request.json.get('reason', 'Banned by an operator.')
     return send_server_command(f'ban {player} {reason}')
-
 
 @app.route('/kick', methods=['POST'])
 def kick_player():
@@ -721,40 +682,33 @@ def kick_player():
     reason = request.json.get('reason', 'Kicked by an operator.')
     return send_server_command(f'kick {player} {reason}')
 
-
 @app.route('/kill', methods=['POST'])
 def kill_player():
     player = request.json['player']
     return send_server_command(f'kill {player}')
-
 
 @app.route('/op', methods=['POST'])
 def op_player():
     player = request.json['player']
     return send_server_command(f'op {player}')
 
-
 @app.route('/pardon', methods=['POST'])
 def pardon_player():
     player = request.json['player']
     return send_server_command(f'pardon {player}')
-
 
 @app.route('/deop', methods=['POST'])
 def deop_player():
     player = request.json['player']
     return send_server_command(f'deop {player}')
 
-
 @app.route('/get-players')
 def get_players():
     return jsonify(list(players))
 
-
 @app.route('/get-console-output')
 def get_console_output():
     return jsonify(console_output)
-
 
 @app.route('/accept-eula', methods=['POST'])
 def accept_eula():
@@ -771,7 +725,6 @@ def accept_eula():
     except Exception:
         return "Ein Fehler ist aufgetreten."
 
-
 @app.route('/server-status')
 def server_status():
     running_flag = read_server_status()
@@ -780,30 +733,22 @@ def server_status():
     status = 'running' if (running_flag and alive and port_ok) else ('crashed' if running_flag and not alive else 'stopped')
     return jsonify({'running': running_flag, 'alive': alive, 'port_open': port_ok, 'status': status})
 
-
 @app.route('/server-info')
 def server_info():
-    """Return live/derived info for the UI."""
     props_path = os.path.join(server_files_dir, 'server.properties')
     props = read_properties(props_path)
-
-    # Values from server.properties
     port = props.get('server-port', '25565')
     motd = props.get('motd', None)
     online_mode = props.get('online-mode', None)
     if isinstance(online_mode, str):
         online_mode = online_mode.strip().lower() == 'true'
-
-    # Derived/live values
     mc_version = get_mc_version_from_logs()
     java_str = get_java_version_string()
     local_ip = get_local_ip()
-    public_ip = get_public_ip()  # None if offline/firewalled
-
+    public_ip = get_public_ip()
     running_flag = read_server_status()
     uptime_sec = (time.time() - SERVER_START_TS) if (SERVER_START_TS and running_flag and is_process_alive()) else 0
     uptime_human = human_duration(uptime_sec) if uptime_sec else None
-
     return jsonify({
         "mc_version": mc_version,
         "java_version": java_str,
@@ -816,8 +761,9 @@ def server_info():
         "uptime_human": uptime_human
     })
 
-
-# -------------------------- Main --------------------------
-
 if __name__ == '__main__':
+    with app.app_context():
+        init_db()
+        ensure_default_admin()
+        reset_admin_if_env()
     socketio.run(app, host="127.0.0.1", port=5003, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)

@@ -4,10 +4,9 @@ trap 'ec=$?; echo "ERROR $ec on line $LINENO"; exit $ec' ERR
 
 DOMAIN="${DOMAIN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
-APP_DIR="/opt/mc-panel"
-APP_USER="mcsvc"
-APP_PORT="5003"
-MC_PORT="25565"
+APP_DIR="${APP_DIR:-$PWD}"
+APP_PORT="${APP_PORT:-5003}"
+MC_PORT="${MC_PORT:-25565}"
 
 if [ "$(id -u)" -ne 0 ]; then echo "run as root"; exit 1; fi
 if ! command -v apt >/dev/null 2>&1; then echo "Debian/Ubuntu required"; exit 1; fi
@@ -16,12 +15,9 @@ apt update
 DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip nginx-full libnginx-mod-stream ufw rsync curl git
 if [ -n "$DOMAIN" ]; then DEBIAN_FRONTEND=noninteractive apt install -y certbot python3-certbot-nginx || true; fi
 
-id -u "$APP_USER" >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin "$APP_USER"
-mkdir -p "$APP_DIR"
-if [ -f "./app.py" ] || [ -f "./Server.py" ]; then rsync -a --delete --exclude venv ./ "$APP_DIR"/; fi
 mkdir -p "$APP_DIR/instance/server"
-
 cd "$APP_DIR"
+
 python3 -m venv venv
 "$APP_DIR/venv/bin/pip" install --upgrade pip setuptools wheel
 "$APP_DIR/venv/bin/pip" install flask flask-socketio eventlet requests flask-cors gunicorn
@@ -30,7 +26,6 @@ import flask, flask_socketio, eventlet, flask_cors
 print("ok")
 PY
 
-chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 chmod 0750 "$APP_DIR/instance" || true
 chmod 0750 "$APP_DIR/instance/server" || true
 
@@ -45,13 +40,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=$APP_USER
-Group=$APP_USER
+User=root
+Group=root
 WorkingDirectory=$APP_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=INSTANCE_PATH=$APP_DIR/instance
 UMask=007
-ExecStartPre=/usr/bin/install -d -o $APP_USER -g $APP_USER -m 0750 $APP_DIR/instance $APP_DIR/instance/server
+ExecStartPre=/usr/bin/install -d -o root -g root -m 0750 $APP_DIR/instance $APP_DIR/instance/server
 ExecStart=$APP_DIR/venv/bin/gunicorn -k eventlet -w 1 -b 127.0.0.1:$APP_PORT $APP_MODULE
 Restart=always
 RestartSec=3
@@ -100,9 +95,10 @@ mkdir -p /etc/nginx/modules-enabled
 tee /etc/nginx/modules-enabled/50-mod-stream.conf >/dev/null <<'EOF'
 load_module /usr/lib/nginx/modules/ngx_stream_module.so;
 EOF
-sed -i '/include \/etc\/nginx\/stream\.conf;/d' /etc/nginx/nginx.conf
-sed -i '/include \/etc\/nginx\/modules-enabled\/\*\.conf;/d' /etc/nginx/nginx.conf
-sed -i '1i include /etc/nginx/modules-enabled/*.conf;\ninclude /etc/nginx/stream.conf;' /etc/nginx/nginx.conf
+
+grep -q 'include /etc/nginx/modules-enabled/\*\.conf;' /etc/nginx/nginx.conf || sed -i '1i include /etc/nginx/modules-enabled/*.conf;' /etc/nginx/nginx.conf
+grep -q 'include /etc/nginx/stream\.conf;' /etc/nginx/nginx.conf || sed -i '1i include /etc/nginx/stream.conf;' /etc/nginx/nginx.conf
+
 cat >/etc/nginx/stream.conf <<EOF
 stream {
     server {
@@ -129,6 +125,7 @@ yes | ufw enable >/dev/null 2>&1 || true
 
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 PUBL_IP=$(curl -fsS https://api.ipify.org || true)
+echo "Install dir: $APP_DIR"
 echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
 [ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"
 echo "Minecraft address: ${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$MC_PORT"

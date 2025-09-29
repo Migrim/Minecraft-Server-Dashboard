@@ -4,7 +4,7 @@ trap 'ec=$?; echo "ERROR $ec on line $LINENO"; exit $ec' ERR
 
 DOMAIN="${DOMAIN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
-APP_DIR="${APP_DIR:-$PWD}"
+APP_DIR="$(readlink -f "${APP_DIR:-$PWD}")"
 APP_PORT="${APP_PORT:-5003}"
 MC_PORT="${MC_PORT:-25565}"
 
@@ -15,7 +15,7 @@ apt update
 DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip nginx-full libnginx-mod-stream ufw rsync curl git
 if [ -n "$DOMAIN" ]; then DEBIAN_FRONTEND=noninteractive apt install -y certbot python3-certbot-nginx || true; fi
 
-mkdir -p "$APP_DIR/instance/server"
+mkdir -p "$APP_DIR/instance/server" "$APP_DIR/uploads" "$APP_DIR/server-files"
 cd "$APP_DIR"
 
 python3 -m venv venv
@@ -26,8 +26,15 @@ import flask, flask_socketio, eventlet, flask_cors
 print("ok")
 PY
 
-chmod 0750 "$APP_DIR/instance" || true
-chmod 0750 "$APP_DIR/instance/server" || true
+chown -R root:root "$APP_DIR"
+find "$APP_DIR" -type d -exec chmod 0775 {} \;
+find "$APP_DIR" -type f -exec chmod 0664 {} \;
+chmod 0775 "$APP_DIR/instance" "$APP_DIR/instance/server" "$APP_DIR/uploads" "$APP_DIR/server-files"
+
+mkdir -p /opt
+if [ -e /opt/mc-panel ] && [ ! -L /opt/mc-panel ]; then rm -rf /opt/mc-panel; fi
+ln -sfn "$APP_DIR" /opt/mc-panel
+chown -h root:root /opt/mc-panel
 
 APP_MODULE="app:app"
 [ -f "$APP_DIR/Server.py" ] && APP_MODULE="Server:app"
@@ -37,7 +44,6 @@ cat >/etc/systemd/system/mc-panel.service <<EOF
 Description=MC Panel (Flask + SocketIO)
 After=network-online.target
 Wants=network-online.target
-
 [Service]
 Type=simple
 User=root
@@ -46,11 +52,10 @@ WorkingDirectory=$APP_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=INSTANCE_PATH=$APP_DIR/instance
 UMask=007
-ExecStartPre=/usr/bin/install -d -o root -g root -m 0750 $APP_DIR/instance $APP_DIR/instance/server
+ExecStartPre=/usr/bin/install -d -o root -g root -m 0775 $APP_DIR/instance $APP_DIR/instance/server $APP_DIR/uploads $APP_DIR/server-files
 ExecStart=$APP_DIR/venv/bin/gunicorn -k eventlet -w 1 -b 127.0.0.1:$APP_PORT $APP_MODULE
 Restart=always
 RestartSec=3
-
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -126,6 +131,7 @@ yes | ufw enable >/dev/null 2>&1 || true
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 PUBL_IP=$(curl -fsS https://api.ipify.org || true)
 echo "Install dir: $APP_DIR"
+echo "Legacy path: /opt/mc-panel -> $APP_DIR"
 echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
 [ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"
 echo "Minecraft address: ${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$MC_PORT"

@@ -30,6 +30,9 @@ app.config['SECRET_KEY'] = 'geheim!'
 socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=25, ping_interval=20, async_mode="threading")
 CORS(app, resources={r"/fs-*": {"origins": "*"}})
 HASH_METHOD = os.environ.get('HASH_METHOD', 'pbkdf2:sha256')
+DB_PATH = os.path.join(app.instance_path, 'users.db')
+app.config.setdefault('BOOTSTRAPPED', False)
+
 
 BOOL_KEYS = {
     'allow-flight','allow-nether','broadcast-console-to-ops','broadcast-rcon-to-ops','enable-command-block',
@@ -158,6 +161,26 @@ def require_login():
     if not session.get('user'):
         return redirect(url_for('login'))
 
+def bootstrap_db_once():
+    if app.config.get('BOOTSTRAPPED'):
+        return
+    os.makedirs(app.instance_path, exist_ok=True)
+    with sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES) as db:
+        db.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT NOT NULL, must_change INTEGER NOT NULL DEFAULT 0)')
+        cur = db.execute('SELECT 1 FROM users WHERE username=?', ('admin',))
+        if cur.fetchone() is None:
+            db.execute('INSERT INTO users(username, password, must_change) VALUES(?,?,?)',
+                       ('admin', generate_password_hash('1234', method=HASH_METHOD), 1))
+        if os.environ.get('RESET_ADMIN') == '1':
+            db.execute('UPDATE users SET password=?, must_change=1 WHERE username=?',
+                       (generate_password_hash('1234', method=HASH_METHOD), 'admin'))
+        db.commit()
+    app.config['BOOTSTRAPPED'] = True
+
+@app.before_request
+def _bootstrap_guard():
+    bootstrap_db_once()
+
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html')
@@ -222,7 +245,7 @@ def change_password():
 
 @app.route('/logout')
 def logout():
-    session.clear
+    session.clear()
     return redirect(url_for('login'))
 
 @app.route('/install')

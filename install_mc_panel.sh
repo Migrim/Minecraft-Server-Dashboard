@@ -7,12 +7,14 @@ CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 APP_DIR="$(readlink -f "${APP_DIR:-$PWD}")"
 APP_PORT="${APP_PORT:-5003}"
 MC_PORT="${MC_PORT:-25565}"
+WANT_NGINX_STREAM="${WANT_NGINX_STREAM:-0}"
+MC_BACKEND_PORT="${MC_BACKEND_PORT:-25566}"
 
 if [ "$(id -u)" -ne 0 ]; then echo "run as root"; exit 1; fi
 if ! command -v apt >/dev/null 2>&1; then echo "Debian/Ubuntu required"; exit 1; fi
 
 apt update
-DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip nginx-full libnginx-mod-stream ufw rsync curl git
+DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip nginx-full ufw rsync curl git
 if [ -n "$DOMAIN" ]; then DEBIAN_FRONTEND=noninteractive apt install -y certbot python3-certbot-nginx || true; fi
 
 mkdir -p "$APP_DIR/instance/server" "$APP_DIR/uploads" "$APP_DIR/server-files"
@@ -28,8 +30,8 @@ PY
 
 chown -R root:root "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 0775 {} \;
-find "$APP_DIR" -type f -exec chmod 0664 {} \;
-chmod 0775 "$APP_DIR/instance" "$APP_DIR/instance/server" "$APP_DIR/uploads" "$APP_DIR/server-files"
+find "$APP_DIR" -type f -not -path "$APP_DIR/venv/bin/*" -exec chmod 0664 {} \;
+chmod 0755 "$APP_DIR/venv/bin" "$APP_DIR/venv/bin/"*
 
 mkdir -p /opt
 if [ -e /opt/mc-panel ] && [ ! -L /opt/mc-panel ]; then rm -rf /opt/mc-panel; fi
@@ -94,24 +96,24 @@ EOF
 ln -sf /etc/nginx/sites-available/mc-panel /etc/nginx/sites-enabled/mc-panel
 rm -f /etc/nginx/sites-enabled/default || true
 
-rm -f /etc/nginx/conf.d/stream.conf || true
-rm -rf /etc/nginx/streams-enabled || true
-mkdir -p /etc/nginx/modules-enabled
-tee /etc/nginx/modules-enabled/50-mod-stream.conf >/dev/null <<'EOF'
+if [ "$WANT_NGINX_STREAM" = "1" ]; then
+  mkdir -p /etc/nginx/modules-enabled
+  tee /etc/nginx/modules-enabled/50-mod-stream.conf >/dev/null <<'EOF'
 load_module /usr/lib/nginx/modules/ngx_stream_module.so;
 EOF
-
-grep -q 'include /etc/nginx/modules-enabled/\*\.conf;' /etc/nginx/nginx.conf || sed -i '1i include /etc/nginx/modules-enabled/*.conf;' /etc/nginx/nginx.conf
-grep -q 'include /etc/nginx/stream\.conf;' /etc/nginx/nginx.conf || sed -i '1i include /etc/nginx/stream.conf;' /etc/nginx/nginx.conf
-
-cat >/etc/nginx/stream.conf <<EOF
+  grep -q 'include /etc/nginx/stream\.conf;' /etc/nginx/nginx.conf || sed -i '1i include /etc/nginx/stream.conf;' /etc/nginx/nginx.conf
+  cat >/etc/nginx/stream.conf <<EOF
 stream {
     server {
         listen $MC_PORT;
-        proxy_pass 127.0.0.1:$MC_PORT;
+        proxy_pass 127.0.0.1:$MC_BACKEND_PORT;
     }
 }
 EOF
+else
+  sed -i '/include \/etc\/nginx\/stream\.conf;/d' /etc/nginx/nginx.conf || true
+  rm -f /etc/nginx/stream.conf || true
+fi
 
 if ! nginx -t; then nginx -T | sed -n '1,200p'; exit 1; fi
 systemctl reload nginx || systemctl restart nginx || true
@@ -135,3 +137,5 @@ echo "Legacy path: /opt/mc-panel -> $APP_DIR"
 echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
 [ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"
 echo "Minecraft address: ${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$MC_PORT"
+ss -ltnp | grep ":$MC_PORT " || true
+ufw status | grep -E "$MC_PORT" || true

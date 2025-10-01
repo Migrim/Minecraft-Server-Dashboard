@@ -355,6 +355,34 @@ def fs_delete():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+@app.route("/fs-upload", methods=["POST"])
+def fs_upload():
+    try:
+        rel = request.form.get("path", "") or ""
+        folder = safe_join(rel)
+        os.makedirs(folder, exist_ok=True)
+        files = request.files.getlist("file")
+        if not files:
+            return jsonify({"ok": False, "error": "no files"}), 400
+        saved = 0
+        for f in files:
+            name = secure_filename(f.filename or "")
+            if not name:
+                continue
+            dest = os.path.join(folder, name)
+            base, ext = os.path.splitext(dest)
+            i = 1
+            while os.path.exists(dest):
+                dest = f"{base} ({i}){ext}"
+                i += 1
+            f.save(dest)
+            saved += 1
+        return jsonify({"ok": True, "saved": saved})
+    except ValueError:
+        return jsonify({"ok": False, "error": "invalid path"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route("/fs-open", methods=["POST"])
 def fs_open():
     data = request.get_json(force=True) or {}

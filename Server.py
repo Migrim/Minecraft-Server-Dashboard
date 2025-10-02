@@ -431,6 +431,48 @@ def fs_save():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+@app.route("/fs-rename", methods=["POST"])
+def fs_rename():
+    data = request.get_json(force=True) or {}
+    rel = (data.get("path") or "").strip()
+    new_name = (data.get("new_name") or "").strip()
+    if not rel or not new_name or "/" in new_name or "\\" in new_name or new_name in {".", ".."}:
+        return jsonify({"ok": False, "error": "invalid name"}), 400
+    try:
+        abs_old = safe_join(rel)
+        if not os.path.exists(abs_old):
+            return jsonify({"ok": False, "error": "not found"}), 404
+        rel_dir = os.path.dirname(rel)
+        new_rel = os.path.join(rel_dir, new_name).replace("\\", "/")
+        abs_new = safe_join(new_rel)
+        if os.path.exists(abs_new):
+            return jsonify({"ok": False, "error": "target exists"}), 409
+        os.replace(abs_old, abs_new)
+        return jsonify({"ok": True, "path": new_rel})
+    except ValueError:
+        return jsonify({"ok": False, "error": "invalid path"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/fs-mkdir", methods=["POST"])
+def fs_mkdir():
+    data = request.get_json(force=True) or {}
+    rel = (data.get("path") or "").strip()
+    if not rel:
+        return jsonify({"ok": False, "error": "missing path"}), 400
+    try:
+        abs_p = safe_join(rel)
+        if os.path.exists(abs_p):
+            return jsonify({"ok": False, "error": "already exists"}), 409
+        os.makedirs(abs_p, exist_ok=False)
+        return jsonify({"ok": True})
+    except ValueError:
+        return jsonify({"ok": False, "error": "invalid path"}), 400
+    except FileExistsError:
+        return jsonify({"ok": False, "error": "already exists"}), 409
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route("/fs-download")
 def fs_download():
     rel = request.args.get("path","")

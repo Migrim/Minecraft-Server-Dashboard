@@ -1,9 +1,6 @@
-# Minecraft Server Panel + Reverse Proxy
+# Minecraft Server Panel
 
 This project is a **Flask-based Minecraft server control panel** with login, file browser, settings editor, live console, and server control (start/stop).  
-It also includes an install script to set up **systemd**, **Nginx reverse proxy** for the web panel, and **Nginx TCP stream proxy** so Minecraft clients can connect.
-
-Repository: https://github.com/Migrim/Minecraft-Server-Dashboard
 
 ---
 

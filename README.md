@@ -7,14 +7,9 @@ Repository: https://github.com/Migrim/Minecraft-Server-Dashboard
 
 ---
 
-## 📥 Download & Setup
+## Download & Setup
 
 ```bash
-# (Optional) on your local machine:
-git clone https://github.com/Migrim/Minecraft-Server-Dashboard.git
-cd Minecraft-Server-Dashboard
-
-# Or directly on the server:
 cd /root
 git clone https://github.com/Migrim/Minecraft-Server-Dashboard.git mc-panel
 cd mc-panel
@@ -29,13 +24,13 @@ If you already have the project files locally, just upload them to your server (
 The script (`install_mc_panel.sh`) has a few variables you may want to change before running it:
 
 ```bash
-APP_DIR="/opt/mc-panel"   # Directory where the app will be installed
+APP_DIR="/root/mc-panel"   # Directory where the app will be installed
 APP_USER="mcsvc"          # System user that will run the app
 APP_PORT="5003"           # Internal Flask port (do not expose directly)
 MC_PORT="25565"           # Minecraft port (clients will connect here)
 ```
 
-- Change **`APP_DIR`** if you want the app somewhere else (default is `/opt/mc-panel`).  
+- Change **`APP_DIR`** if you want the app somewhere else (default is `/root/mc-panel`).  
 - Change **`APP_USER`** if you want a different system user than `mcsvc`.  
 - Change **`MC_PORT`** if you want Minecraft to run on a non-standard port.  
 - Keep **`APP_PORT`** as `5003` unless you know what you’re doing — Nginx proxies to it.  
@@ -50,7 +45,7 @@ Save with **CTRL+O**, exit with **CTRL+X**.
 
 ---
 
-## 🔐 (Optional) Enable HTTPS via Let’s Encrypt
+## (Optional) Enable HTTPS via Let’s Encrypt
 
 Before running the installer, define your domain and email:
 
@@ -59,17 +54,11 @@ export DOMAIN=yourdomain.com
 export CERTBOT_EMAIL=you@example.com
 ```
 
-Then run:
-
-```bash
-sudo bash install_mc_panel.sh
-```
-
 The installer will automatically request a certificate from Let’s Encrypt and configure Nginx for HTTPS.
 
 ---
 
-## 🚀 Run Installation
+##  Run Installation
 
 ```bash
 sudo bash install_mc_panel.sh
@@ -88,7 +77,7 @@ This will:
 
 ---
 
-## 🚪 Usage & Access
+## Usage & Access
 
 - **Web Panel:**  
   - `http://<server-ip>/`  
@@ -106,14 +95,14 @@ This will:
   Use the `/install` page in the panel.
 
 - **Accept EULA:**  
-  Click the “Accept EULA” button.
+  Run the server once and then click the “Accept EULA” button.
 
 - **Start Server:**  
   Click **Start** in the panel.
 
 ---
 
-## 🛠 Service Management
+## Service Management
 
 The panel runs as a **systemd service**:
 
@@ -133,7 +122,7 @@ sudo systemctl restart mc-panel
 
 ---
 
-## 🔥 Firewall
+## Firewall
 
 The installer configures **ufw** to allow:
 
@@ -141,15 +130,6 @@ The installer configures **ufw** to allow:
 - HTTP (80/tcp)  
 - HTTPS (443/tcp)  
 - Minecraft (25565/tcp)  
-
----
-
-## 📂 Paths & Structure
-
-- App root: `/opt/mc-panel`  
-- Virtualenv: `/opt/mc-panel/venv`  
-- Minecraft files: `/opt/mc-panel/instance/server`  
-- User database: `/opt/mc-panel/instance/users.json`  
 
 ---
 
@@ -163,16 +143,3 @@ The installer configures **ufw** to allow:
 - Default memory allocation: `-Xmx1024M -Xms1024M` (edit in `app.py` → `start_server()`).  
 - Make sure port **25565** is open on your host/ISP firewall.  
 - If using a domain, set DNS A/AAAA record to your server’s IP before running Certbot.
-
----
-
-## ✅ Tested On
-
-- Ubuntu 22.04 LTS  
-- Debian 12 (Bookworm)  
-
----
-
-## 🎉 Final Notes
-
-Once installed, you’ll have a **full Minecraft server control panel** running behind Nginx, accessible over HTTP(S), with Minecraft clients connecting via port `25565`.

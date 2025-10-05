@@ -43,6 +43,7 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .side{display:flex;flex-direction:column;gap:16px}
 .section{border:1px solid var(--border);border-radius:14px;background:#0e0e11}
 .section .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600}
+.count-badge{margin-left:8px;font-weight:600;font-size:12px;color:#cbd5e1;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:2px 8px;line-height:1}
 .kit{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:#cbd5e1}
 .kit b{color:#fff}
 .filebox .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
@@ -50,7 +51,21 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .filebox .row:first-child{margin-top:6px}
 /* NEW: give the info area a bit of left padding */
 .filebox{padding-left:14px}
-
+/* Server Info: compact, inline-wrapping chips with minimal dead space */
+.filebox{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 10px;
+  padding:10px 14px 12px;
+}
+.filebox .row{display:contents; margin:0}
+.kit{
+  padding:6px 8px;
+  font-size:12px;
+  line-height:1.1;
+  border-radius:8px;
+}
+.kit b{margin-right:6px}
 /* Players list = max 3 rows, scrollable */
 .players{max-height:calc(3*52px);overflow:auto}
 .player{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #141418;min-height:52px}
@@ -113,6 +128,14 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
   background:#151518 !important;
   border-color: var(--border) !important;
 }
+.kit.motd-chip{display:flex;align-items:center;gap:8px;flex:0 0 100%;max-width:100%}
+.motd-chip b{color:#fff;flex:0 0 auto}
+.motd-track{flex:1 1 0%;width:0;min-width:0;overflow:hidden;position:relative}
+.motd-inner{display:inline-flex;transform:translateX(0)}
+.motd-item{display:inline-block;white-space:nowrap;padding-right:40px}
+.motd-chip.marquee .motd-inner{will-change:transform;animation:motd-loop var(--motd-dur,14s) linear infinite}
+@keyframes motd-loop{from{transform:translateX(0)} to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion: reduce){.motd-chip.marquee .motd-inner{animation:none}}
 </style>
 {% endblock %}
 
@@ -144,25 +167,22 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 
     <div class="side">
       <div class="section">
-        <div class="title">Players</div>
+        <div class="title">Players <span id="players-count" class="count-badge">0</span></div>
         <div id="player-list" class="players"></div>
         <div style="padding:12px;border-top:1px solid var(--border);font-size:13px;color:#cbd5e1" id="players-empty">No active players</div>
       </div>
       <div class="section">
         <div class="title">Server Info</div>
+      
         <div class="filebox">
+          <span class="kit motd-chip"><b>MOTD</b><div class="motd-track"><div class="motd-inner"><span id="info-motd" class="motd-item">—</span><span class="motd-item motd-dup">—</span></div></div></span>
           <div class="row">
             <span class="kit"><b>Minecraft</b> <span id="info-version">—</span></span>
-            <span class="kit"><b>Java</b> <span id="info-java">—</span></span>
             <span class="kit"><b>Uptime</b> <span id="info-uptime">—</span></span>
-          </div>
-          <div class="row">
+            <span class="kit"><b>Java</b> <span id="info-java">—</span></span>
             <span class="kit"><b>Public IP</b> <span id="info-public">—</span></span>
             <span class="kit"><b>Local IP</b> <span id="info-local">—</span></span>
             <span class="kit"><b>Port</b> <span id="info-port">—</span></span>
-          </div>
-          <div class="row">
-            <span class="kit"><b>MOTD</b> <span id="info-motd">—</span></span>
             <span class="kit"><b>Online Mode</b> <span id="info-online">—</span></span>
           </div>
         </div>
@@ -196,11 +216,14 @@ document.addEventListener('DOMContentLoaded',()=> {
   const toasts=document.getElementById('toasts')
   const playersEl=document.getElementById('player-list')
   const playersEmpty=document.getElementById('players-empty')
+  const playersCount=document.getElementById('players-count')
   const eulaBtn=document.getElementById('accept-eula')
   const startModal=document.getElementById('start-modal')
   const dropdown=document.getElementById('player-dropdown')
   const exitRe=/Server process exited/i
   let awaitingExit=false
+  let motdState={text:'', width:0}
+  let resizeTimer=null
 
   const els = {
     version: document.getElementById('info-version'),
@@ -245,6 +268,35 @@ document.addEventListener('DOMContentLoaded',()=> {
     if(!name) return ''
     if(name.length<=maxLen) return name
     return name.slice(0,Math.max(0,maxLen-1))+'…'
+  }
+
+  function setupMotdMarquee(){
+    {
+      const chip=document.querySelector('.motd-chip')
+      if(!chip) return
+      const track=chip.querySelector('.motd-track')
+      const inner=chip.querySelector('.motd-inner')
+      const s1=chip.querySelector('#info-motd')
+      const s2=chip.querySelector('.motd-dup') || chip.querySelector('.motd-item.motd-dup')
+      if(!track||!inner||!s1||!s2) return
+      const text=(s1.textContent||'').trim()
+      if(s2.textContent!==text) s2.textContent=text
+      const view=Math.round(track.clientWidth)
+      const sameText=(text===motdState.text)
+      const widthUnchanged=(Math.abs(view - motdState.width) < 4)
+      if(sameText && widthUnchanged) return
+      const content=Math.round(s1.scrollWidth + 40)
+      if(content > view + 8){
+        const pxPerSec=35
+        const dur=Math.max(12, content/pxPerSec)
+        chip.style.setProperty('--motd-dur', dur+'s')
+        chip.classList.add('marquee')
+      }else{
+        chip.classList.remove('marquee')
+        inner.style.transform='translateX(0)'
+      }
+      motdState={text, width:view}
+    }
   }
 
   function toast(title,msg,type,actions){
@@ -498,6 +550,7 @@ document.addEventListener('DOMContentLoaded',()=> {
       playersEl.innerHTML=''
       list.forEach(p=>playersEl.appendChild(renderPlayerRow(p)))
       playersEmpty.style.display=list.length? 'none':'block'
+      playersCount.textContent=String(list.length)
       const names=list.map(x=>typeof x==='string'?x:(x&&x.name?x.name:'')) 
       if(currentPlayer && !names.includes(currentPlayer)) closeDropdown()
     })
@@ -516,9 +569,15 @@ document.addEventListener('DOMContentLoaded',()=> {
         set(els.local, info.local_ip || '—')
         set(els.port, info.port || '—')
         set(els.motd, info.motd || '—')
+        setupMotdMarquee()
         set(els.online, info.online_mode === true ? 'true' : (info.online_mode === false ? 'false' : '—'))
       })
   }
+
+  window.addEventListener('resize', ()=>{
+    clearTimeout(resizeTimer)
+    resizeTimer=setTimeout(()=>setupMotdMarquee(),150)
+  })
 
   let watcher=null
   let baselineCount=0

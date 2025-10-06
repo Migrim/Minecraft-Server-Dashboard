@@ -133,6 +133,8 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .motd-track{flex:1 1 0%;width:0;min-width:0;overflow:hidden;position:relative}
 .motd-inner{display:inline-flex;transform:translateX(0)}
 .motd-item{display:inline-block;white-space:nowrap;padding-right:40px}
+.motd-dup{display:none}
+.motd-chip.marquee .motd-dup{display:inline-block}
 .motd-chip.marquee .motd-inner{will-change:transform;animation:motd-loop var(--motd-dur,14s) linear infinite}
 @keyframes motd-loop{from{transform:translateX(0)} to{transform:translateX(-50%)}}
 @media (prefers-reduced-motion: reduce){.motd-chip.marquee .motd-inner{animation:none}}
@@ -280,7 +282,6 @@ document.addEventListener('DOMContentLoaded',()=> {
       const s2=chip.querySelector('.motd-dup') || chip.querySelector('.motd-item.motd-dup')
       if(!track||!inner||!s1||!s2) return
       const text=(s1.textContent||'').trim()
-      if(s2.textContent!==text) s2.textContent=text
       const view=Math.round(track.clientWidth)
       const sameText=(text===motdState.text)
       const widthUnchanged=(Math.abs(view - motdState.width) < 4)
@@ -290,9 +291,11 @@ document.addEventListener('DOMContentLoaded',()=> {
         const pxPerSec=35
         const dur=Math.max(12, content/pxPerSec)
         chip.style.setProperty('--motd-dur', dur+'s')
+        if(s2.textContent!==text) s2.textContent=text
         chip.classList.add('marquee')
       }else{
         chip.classList.remove('marquee')
+        s2.textContent=''
         inner.style.transform='translateX(0)'
       }
       motdState={text, width:view}

@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import base64, hashlib, hmac, sqlite3
+import shutil
 
 try:
     import requests
@@ -33,6 +34,18 @@ HASH_METHOD = os.environ.get('HASH_METHOD', 'pbkdf2:sha256')
 DB_PATH = os.path.join(app.instance_path, 'users.db')
 app.config.setdefault('BOOTSTRAPPED', False)
 
+PANEL_DEFAULTS = {
+    'auto_restart': True,
+    'restart_delay_sec': 10,
+    'auto_start_on_boot': False,
+    'min_ram_mb': 1024,
+    'max_ram_mb': 2048,
+    'jvm_extra': '',
+    'scheduled_restart_enabled': False,
+    'scheduled_restart_time': '04:30',
+    'backup_on_restart': False,
+    'backup_keep': 5
+}
 
 BOOL_KEYS = {
     'allow-flight','allow-nether','broadcast-console-to-ops','broadcast-rcon-to-ops','enable-command-block',
@@ -48,7 +61,20 @@ SELECT_OPTIONS = {
     'region-file-compression': ['deflate','zlib','gzip','none']
 }
 
+panel_restart_lock = threading.Lock()
+last_schedule_mark = None
+
 console_output = []
+MAX_CONSOLE_LINES = 5000
+
+def _append_console(line: str):
+    global console_output
+    try:
+        console_output.append(line)
+    except Exception:
+        return
+    if len(console_output) > MAX_CONSOLE_LINES:
+        del console_output[0:len(console_output)-MAX_CONSOLE_LINES]
 players = set()
 server_process = None
 SERVER_START_TS = None
@@ -175,6 +201,7 @@ def bootstrap_db_once():
             db.execute('UPDATE users SET password=?, must_change=1 WHERE username=?',
                        (generate_password_hash('1234', method=HASH_METHOD), 'admin'))
         db.commit()
+    ensure_panel_defaults()
     app.config['BOOTSTRAPPED'] = True
 
 @app.before_request
@@ -195,8 +222,173 @@ def settings():
 
 @app.route('/panel-settings')
 def panel_settings():
-    flash('not implemented yet :3', 'info')
     return render_template('panel-settings.html')
+
+@app.route('/panel-settings-data')
+def panel_settings_data():
+    return jsonify(get_panel_settings())
+
+@app.route('/panel-settings-save', methods=['POST'])
+def panel_settings_save():
+    data = request.get_json(force=True) or {}
+    save_panel_settings(data)
+    return jsonify({'ok': True})
+
+def get_panel_settings():
+    db = get_db()
+    db.execute('CREATE TABLE IF NOT EXISTS panel_settings (key TEXT PRIMARY KEY, val TEXT NOT NULL)')
+    cur = db.execute('SELECT key, val FROM panel_settings')
+    rows = cur.fetchall()
+    out = dict(PANEL_DEFAULTS)
+    for r in rows:
+        k = r['key']
+        v = r['val']
+        if k in {'auto_restart','auto_start_on_boot','scheduled_restart_enabled','backup_on_restart'}:
+            out[k] = (v == '1')
+        elif k in {'restart_delay_sec','min_ram_mb','max_ram_mb','backup_keep'}:
+            try:
+                out[k] = int(v)
+            except Exception:
+                pass
+        else:
+            out[k] = v
+    return out
+
+def save_panel_settings(updates: dict):
+    if not updates:
+        return
+    db = get_db()
+    db.execute('CREATE TABLE IF NOT EXISTS panel_settings (key TEXT PRIMARY KEY, val TEXT NOT NULL)')
+    for k, v in updates.items():
+        if k in {'auto_restart','auto_start_on_boot','scheduled_restart_enabled','backup_on_restart'}:
+            val = '1' if bool(v) else '0'
+        else:
+            val = str(v)
+        db.execute('INSERT INTO panel_settings(key,val) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET val=excluded.val', (k, val))
+    db.commit()
+
+def ensure_panel_defaults():
+    cur = get_db().execute('SELECT 1 FROM sqlite_master WHERE type="table" AND name="panel_settings"')
+    if not cur.fetchone():
+        save_panel_settings(PANEL_DEFAULTS)
+        return
+    have = get_panel_settings()
+    missing = {k: v for k, v in PANEL_DEFAULTS.items() if k not in have}
+    if missing:
+        save_panel_settings(missing)
+
+def backup_server_folder():
+    os.makedirs(app.instance_path, exist_ok=True)
+    src = server_files_dir
+    if not os.path.isdir(src):
+        return None
+    out_dir = os.path.join(app.instance_path, 'server-backups')
+    os.makedirs(out_dir, exist_ok=True)
+    ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+    base = os.path.join(out_dir, f'backup-{ts}')
+    archive = shutil.make_archive(base, 'zip', src)
+    keep = max(1, int(get_panel_settings().get('backup_keep', 5)))
+    files = sorted([os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.endswith('.zip')])
+    if len(files) > keep:
+        for f in files[:len(files)-keep]:
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+    return archive
+
+def graceful_restart_with_options(do_backup=False):
+    if do_backup:
+        try:
+            backup_server_folder()
+        except Exception:
+            pass
+    stop_server_async()
+    t0 = time.time()
+    while is_process_alive() and time.time() - t0 < 60:
+        time.sleep(0.5)
+    start_server()
+
+def watchdog_loop():
+    with app.app_context():
+        while True:
+            try:
+                s = get_panel_settings()
+                if s.get('auto_restart', True):
+                    running_flag = read_server_status()
+                    alive = is_process_alive()
+                    if running_flag and not alive:
+                        d = int(s.get('restart_delay_sec', 10))
+                        time.sleep(max(0, d))
+                        if read_server_status() and not is_process_alive():
+                            start_server()
+                time.sleep(2)
+            except Exception:
+                time.sleep(2)
+
+def schedule_loop():
+    with app.app_context():
+        global last_schedule_mark
+        while True:
+            try:
+                s = get_panel_settings()
+                if s.get('scheduled_restart_enabled', False):
+                    hhmm = str(s.get('scheduled_restart_time','04:30'))
+                    now = datetime.now()
+                    if now.strftime('%H:%M') == hhmm:
+                        mark = now.strftime('%Y-%m-%d %H:%M')
+                        if last_schedule_mark != mark:
+                            last_schedule_mark = mark
+                            with panel_restart_lock:
+                                graceful_restart_with_options(bool(s.get('backup_on_restart', False)))
+                time.sleep(20)
+            except Exception:
+                time.sleep(5)
+
+def backups_dir():
+    return os.path.join(app.instance_path, 'server-backups')
+
+def list_backups():
+    out = []
+    bdir = backups_dir()
+    if not os.path.isdir(bdir):
+        return out
+    for name in sorted(os.listdir(bdir)):
+        if not name.endswith('.zip'):
+            continue
+        p = os.path.join(bdir, name)
+        try:
+            st = os.stat(p)
+            out.append({
+                'name': name,
+                'size_bytes': st.st_size,
+                'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds')
+            })
+        except Exception:
+            continue
+    return list(reversed(out))
+
+@app.route('/backups-list')
+def backups_list():
+    return jsonify({'items': list_backups()})
+
+@app.route('/backup-create', methods=['POST'])
+def backup_create():
+    path = backup_server_folder()
+    if not path:
+        return jsonify({'ok': False}), 500
+    return jsonify({'ok': True, 'name': os.path.basename(path)})
+
+@app.route('/backup-download')
+def backup_download():
+    name = request.args.get('name','')
+    if not name or '/' in name or '\\' in name or not name.endswith('.zip'):
+        return 'invalid', 400
+    bdir = backups_dir()
+    fp = os.path.join(bdir, name)
+    if not os.path.isfile(fp):
+        return 'not found', 404
+    return send_file(fp, as_attachment=True, download_name=name)
 
 @app.route('/login', methods=['GET','POST'])
 def login():
@@ -652,31 +844,40 @@ def java_major():
         return None
 
 def start_server():
-    global server_process, SERVER_START_TS
-    if not os.path.isfile(jar_path):
-        return
-    ver = java_major()
-    if ver is None:
-        console_output.append('Error: Java not found. Install Java 21+ or set JAVA_CMD.')
-        return
-    if ver < 21:
-        console_output.append(f'Error: Java {ver} detected. This server requires Java 21+. Install Java 21 and set JAVA_CMD or upgrade PATH.')
-        return
-    save_server_status(True)
-    if server_process is None or server_process.poll() is not None:
-        try:
-            server_process = subprocess.Popen(
-                [JAVA_CMD, "-Xmx1024M", "-Xms1024M", "-jar", jar_filename, "nogui"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                cwd=server_files_dir
-            )
-            SERVER_START_TS = time.time()
-            threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
-        except Exception as e:
-            console_output.append(f"Server start error: {e}")
+    with app.app_context():
+        global server_process, SERVER_START_TS
+        if not os.path.isfile(jar_path):
+            return
+        ver = java_major()
+        if ver is None:
+            _append_console('Error: Java not found. Install Java 21+ or set JAVA_CMD.')
+            return
+        if ver < 21:
+            _append_console(f'Error: Java {ver} detected. This server requires Java 21+. Install Java 21 and set JAVA_CMD or upgrade PATH.')
+            return
+        save_server_status(True)
+        if server_process is None or server_process.poll() is not None:
+            try:
+                s = get_panel_settings()
+                xms = max(256, int(s.get('min_ram_mb', 1024)))
+                xmx = max(xms, int(s.get('max_ram_mb', 2048)))
+                jextra = str(s.get('jvm_extra','')).strip()
+                args = [JAVA_CMD, f'-Xmx{xmx}M', f'-Xms{xms}M']
+                if jextra:
+                    args += jextra.split()
+                args += ['-jar', jar_filename, 'nogui']
+                server_process = subprocess.Popen(
+                    args,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=server_files_dir
+                )
+                SERVER_START_TS = time.time()
+                threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
+            except Exception as e:
+                _append_console(f"Server start error: {e}")
 
 @app.route('/start')
 def start_minecraft_server():
@@ -716,7 +917,7 @@ def emit_server_output(process):
     global console_output, players, server_process, SERVER_START_TS
     for line in iter(process.stdout.readline, ''):
         line_display = line.replace('<', 'ඞ').replace('>', 'ඞ')
-        console_output.append(line_display)
+        _append_console(line_display)
         socketio.emit('server_output', {'data': line_display})
         join_match = re.search(r"\[Server thread/INFO\]: (\w+) joined the game", line)
         if join_match:
@@ -731,7 +932,7 @@ def emit_server_output(process):
     players.clear()
     server_process = None
     SERVER_START_TS = None
-    console_output.append(f"Server process exited with code {rc}")
+    _append_console(f"Server process exited with code {rc}")
     socketio.emit('server_output', {'data': f"Server process exited with code {rc}"})
 
 @app.route('/send-command', methods=['POST'])
@@ -742,7 +943,7 @@ def send_command():
         if server_process and server_process.stdin and not server_process.poll():
             server_process.stdin.write(command)
             server_process.stdin.flush()
-            console_output.append(f"Command: {command.strip()}")
+            _append_console(f"Command: {command.strip()}")
             return jsonify({"status": "Command sent"})
         else:
             return jsonify({"error": "Server not running or input stream closed"}), 400
@@ -755,12 +956,12 @@ def send_server_command(command):
         if server_process and server_process.stdin and not server_process.poll():
             server_process.stdin.write(f'{command}\n')
             server_process.stdin.flush()
-            console_output.append(f"Command: {command.strip()}")
+            _append_console(f"Command: {command.strip()}")
             return jsonify({"status": "Command sent", "command": command.strip()})
         else:
             return jsonify({"error": "Server not running or input stream closed"}), 400
     except Exception as e:
-        console_output.append(f"Error: {e}")
+        _append_console(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/ban', methods=['POST'])
@@ -859,4 +1060,10 @@ if __name__ == '__main__':
         init_db()
         ensure_default_admin()
         reset_admin_if_env()
+        ensure_panel_defaults()
+        s = get_panel_settings()
+        threading.Thread(target=watchdog_loop, daemon=True).start()
+        threading.Thread(target=schedule_loop, daemon=True).start()
+        if s.get('auto_start_on_boot', False) and os.path.isfile(jar_path) and not is_process_alive():
+            start_server()
     socketio.run(app, host="127.0.0.1", port=5003, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)

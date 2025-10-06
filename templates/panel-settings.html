@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}Panel Settings{% endblock %}
+{% block head_extra %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+body{background:#0a0a0a}
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:420px;background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f 0%,transparent 60%);pointer-events:none}
+.card{width:min(1100px,96vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
+.header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.header h1{margin:0;font-size:22px;letter-spacing:.2px}
+.header-right{display:flex;align-items:center;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
+.badge b{color:#fff}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
+.btn:hover{background:#191a20}
+.btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
+.btn.primary:hover{filter:brightness(1.05)}
+.layout{padding:0 24px 24px;display:grid;grid-template-columns:340px 1fr;gap:16px}
+@media (max-width:1000px){.layout{grid-template-columns:1fr}}
+.panel{border:1px solid var(--border);border-radius:14px;background:#0e0e11;display:flex;flex-direction:column;min-height:520px;height:80vh;overflow:hidden}
+.panel .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.section{padding:12px 14px;border-bottom:1px solid var(--border)}
+.section:last-child{border-bottom:none}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:720px){.grid2{grid-template-columns:1fr}}
+.row{display:grid;grid-template-columns:220px 1fr;align-items:center;gap:12px;margin-bottom:10px}
+.row:last-child{margin-bottom:0}
+.row .label{color:#cbd5e1;font-size:14px}
+.input{border:1px solid var(--border);background:#111114;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;outline:none;width:100%}
+.small{font-size:12px;color:#9aa0ab}
+.toolbar{padding:10px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:auto}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:8px;font-size:13px;padding:10px 12px}
+.kv .k{color:#9aa0ab}
+.stat{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.stat:last-child{border-bottom:none}
+.dot{width:10px;height:10px;border-radius:999px;background:#444;border:1px solid #2a2a2e}
+.dot.ok{background:#22c55e;border-color:#1d3b29}
+.dot.bad{background:#ef4444;border-color:#3a1f22}
+.tag{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;font-size:12px}
+.tag.info{background:#121217;border:1px solid #2a2a33;color:#cbd5e1}
+.toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
+.toast{min-width:280px;max-width:96vw;background:#111114;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(16px);opacity:0;animation:toast-in .18s ease forwards}
+.toast.ok{border-color:#1f3f28}
+.toast.err{border-color:#3a1f22}
+.toast .t-content{flex:1}
+.toast .t-title{font-weight:600;margin:0 0 2px}
+.toast .t-msg{font-size:13px;color:#cbd5e1}
+@keyframes toast-in{to{transform:translateY(0);opacity:1}}
+@keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+.switch{position:relative;display:inline-block;width:44px;height:24px;vertical-align:middle}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#2a2a33;border:1px solid #1f1f25;transition:.2s;border-radius:30px}
+.slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;top:50%;transform:translateY(-50%);background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked + .slider{background:#3b3be0;border-color:#2f2fb5}
+.switch input:checked + .slider:before{transform:translate(20px,-50%)}
+.help{margin-left:8px}
+
+/* Backups table tweaks */
+.table{display:block;width:100%;padding:16px 12px 12px;border-top:1px solid var(--border);max-height:unset;overflow:visible;background:transparent;scrollbar-width:thin;scrollbar-color:#2a2d37 transparent}
+.table::-webkit-scrollbar{width:8px;height:8px}
+.table::-webkit-scrollbar-track{background:transparent}
+.table::-webkit-scrollbar-thumb{background:#2a2d37;border-radius:10px}
+.table::-webkit-scrollbar-thumb:hover{background:#343949}
+.tr{display:grid;grid-template-columns:1fr 120px 170px;gap:18px;align-items:center;background:#0f0f12;border:1px solid #141418;border-radius:12px;padding:12px 16px;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.tr:hover{background:#111116;border-color:#1a1b22;box-shadow:0 10px 28px rgba(0,0,0,.26)}
+.th{opacity:.8;font-size:12px;background:transparent;border:0;margin-bottom:4px}
+.actions{display:flex;gap:8px;justify-content:flex-end}
+.name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
+.name .mi{font-size:18px;opacity:.9}
+.btn.sm{padding:8px 10px;font-size:12px;border-radius:8px}
+
+.section.backups{padding-top:28px}
+.section.backups .table{margin-top:18px}
+#backup-rows{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:10px 4px 0;
+  max-height:72px; 
+  overflow:auto;
+  scrollbar-width:thin;
+  scrollbar-color:#2a2d37 transparent
+}
+#backup-rows::-webkit-scrollbar{width:8px;height:8px}
+#backup-rows::-webkit-scrollbar-track{background:transparent}
+#backup-rows::-webkit-scrollbar-thumb{background:#2a2d37;border-radius:10px}
+#backup-rows::-webkit-scrollbar-thumb:hover{background:#343949}
+
+.btn.loading{opacity:.8;pointer-events:none;position:relative}
+.btn .spin{display:none;width:16px;height:16px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;animation:spin .6s linear infinite;vertical-align:-3px;margin-right:8px}
+.btn.loading .spin{display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="header">
+    <h1>Panel Settings</h1>
+    <div class="header-right">
+      <span class="badge"><b>Status</b> <span id="status-text">Unknown</span></span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <div class="title">Server Status</div>
+      <div class="stat"><span id="dot-running" class="dot"></span><div><div class="small">Process</div><div id="proc-txt">Unknown</div></div></div>
+      <div class="stat"><span id="dot-port" class="dot"></span><div><div class="small">Port</div><div id="port-txt">Unknown</div></div></div>
+      <div class="stat"><span class="dot" id="dot-uptime"></span><div><div class="small">Uptime</div><div id="uptime-txt">—</div></div></div>
+      <div class="section backups">
+        <div class="kv">
+          <div class="k">Minecraft</div><div id="mc-ver">—</div>
+          <div class="k">Java</div><div id="java-ver">—</div>
+          <div class="k">Public IP</div><div id="pub-ip">—</div>
+          <div class="k">Local IP</div><div id="loc-ip">—</div>
+          <div class="k">MOTD</div><div id="motd">—</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button id="btn-start" class="btn">Start</button>
+        <button id="btn-stop" class="btn">Stop</button>
+        <span class="tag info">Changes to RAM/JVM apply on next start</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="title">Configuration</div>
+
+      <div class="section">
+        <div class="row">
+          <div class="label">Auto restart on crash</div>
+          <div>
+            <label class="switch"><input id="auto_restart" type="checkbox"><span class="slider"></span></label>
+            <span class="small help">Restarts when process dies</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="label">Restart delay (s)</div>
+          <input id="restart_delay_sec" class="input" type="number" min="0" step="1">
+        </div>
+        <div class="row">
+          <div class="label">Auto start on boot</div>
+          <label class="switch"><input id="auto_start_on_boot" type="checkbox"><span class="slider"></span></label>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="row">
+          <div class="label">Min RAM (MB)</div>
+          <input id="min_ram_mb" class="input" type="number" min="256" step="128">
+        </div>
+        <div class="row">
+          <div class="label">Max RAM (MB)</div>
+          <input id="max_ram_mb" class="input" type="number" min="256" step="128">
+        </div>
+        <div class="row">
+          <div class="label">JVM extra flags</div>
+          <input id="jvm_extra" class="input" placeholder="-XX:+UseG1GC -XX:MaxGCPauseMillis=100">
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="row">
+          <div class="label">Scheduled restart</div>
+          <div>
+            <label class="switch"><input id="scheduled_restart_enabled" type="checkbox"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="row">
+            <div class="label">Time (HH:MM)</div>
+            <input id="scheduled_restart_time" class="input" type="time" step="60">
+          </div>
+          <div class="row">
+            <div class="label">Backup before restart</div>
+            <label class="switch"><input id="backup_on_restart" type="checkbox"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="row">
+          <div class="label">Backups to keep</div>
+          <input id="backup_keep" class="input" type="number" min="1" step="1">
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="row" style="grid-template-columns:1fr auto;align-items:center">
+          <div class="label" style="grid-column:1/2">Backups</div>
+          <div class="actions">
+            <button id="btn-backup-refresh" class="btn">Refresh</button>
+            <button id="btn-backup-create" class="btn"><span class="spin"></span><span class="txt">Create Backup</span></button>
+          </div>
+        </div>
+        <div class="table">
+          <div class="tr th" style="background:transparent;border:0;padding:0">
+            <div>Name</div><div>Size</div><div style="text-align:right">Actions</div>
+          </div>
+          <div id="backup-rows"></div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button id="btn-save" class="btn primary">Save</button>
+        <button id="btn-restart" class="btn">Restart Server</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function el(t,a,c){const n=document.createElement(t);if(a){const d=a.dataset;const r={...a};delete r.dataset;Object.assign(n,r);if(d){for(const k in d){n.setAttribute('data-'+k.replace(/[A-Z]/g,m=>'-'+m.toLowerCase()),d[k])}}}if(c!==undefined)n.innerHTML=c;return n}
+function toast(t,m,type){const w=document.getElementById('toasts');const d=el('div',{className:'toast '+(type||'')});const c=el('div',{className:'t-content'});c.appendChild(el('div',{className:'t-title'},t));c.appendChild(el('div',{className:'t-msg'},m||''));d.appendChild(c);w.appendChild(d);setTimeout(()=>{d.style.animation='toast-out .16s ease forwards';setTimeout(()=>d.remove(),160)},4200)}
+function api(p,opts){const base=location.protocol==='file:'?'http://127.0.0.1:5003':'';return fetch(base+p,opts).then(async r=>{const t=await r.text();let j;try{j=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error((j&&j.error)||t||('HTTP '+r.status));return j||{}})}
+function fmtSize(b){if(!b&&b!==0)return '—';const u=['B','KB','MB','GB','TB'];let i=0;let x=Number(b);while(x>=1024&&i<u.length-1){x/=1024;i++}return x.toFixed(x>=10||i===0?0:1)+' '+u[i]}
+const ids=['auto_restart','restart_delay_sec','auto_start_on_boot','min_ram_mb','max_ram_mb','jvm_extra','scheduled_restart_enabled','scheduled_restart_time','backup_on_restart','backup_keep']
+const elms={}
+ids.forEach(id=>elms[id]=document.getElementById(id))
+const statusText=document.getElementById('status-text')
+const dotRun=document.getElementById('dot-running')
+const dotPort=document.getElementById('dot-port')
+const procTxt=document.getElementById('proc-txt')
+const portTxt=document.getElementById('port-txt')
+const uptimeTxt=document.getElementById('uptime-txt')
+const mcVer=document.getElementById('mc-ver')
+const javaVer=document.getElementById('java-ver')
+const pubIp=document.getElementById('pub-ip')
+const locIp=document.getElementById('loc-ip')
+const motd=document.getElementById('motd')
+const btnSave=document.getElementById('btn-save')
+const btnRestart=document.getElementById('btn-restart')
+const btnStart=document.getElementById('btn-start')
+const btnStop=document.getElementById('btn-stop')
+const rows=document.getElementById('backup-rows')
+const btnBRefresh=document.getElementById('btn-backup-refresh')
+const btnBCreate=document.getElementById('btn-backup-create')
+
+function loadSettings(){
+  api('/panel-settings-data').then(s=>{
+    Object.keys(elms).forEach(k=>{
+      const e=elms[k];const v=s[k];
+      if(e.type==='checkbox'){e.checked=!!v}else{if(v!==undefined&&v!==null)e.value=String(v)}
+    })
+  }).catch(e=>toast('Error',e.message||'Failed to load settings','err'))
+}
+function saveSettings(){
+  const body={}
+  Object.keys(elms).forEach(k=>{const e=elms[k];body[k]=e.type==='checkbox'?e.checked:(e.value||'')})
+  return api('/panel-settings-save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(()=>toast('Saved','Settings updated','ok')).catch(e=>toast('Error',e.message||'Failed to save','err'))
+}
+function refreshStatus(){
+  api('/server-status').then(s=>{
+    const st=s.status||'unknown'
+    statusText.textContent=st.charAt(0).toUpperCase()+st.slice(1)
+    dotRun.classList.toggle('ok',!!s.alive);dotRun.classList.toggle('bad',!s.alive)
+    procTxt.textContent=s.alive?'Running':'Not running'
+    dotPort.classList.toggle('ok',!!s.port_open);dotPort.classList.toggle('bad',!s.port_open)
+  }).catch(()=>{})
+  api('/server-info').then(i=>{
+    mcVer.textContent=i.mc_version||'—';javaVer.textContent=i.java_version||'—'
+    pubIp.textContent=i.public_ip||'—';locIp.textContent=i.local_ip||'—'
+    motd.textContent=i.motd||'—';uptimeTxt.textContent=i.uptime_human||'—'
+    portTxt.textContent=i.port?String(i.port):'—'
+  }).catch(()=>{})
+}
+function renderBackups(list){
+  rows.innerHTML=''
+  if(!Array.isArray(list)||!list.length){
+    rows.appendChild(el('div',{className:'small',style:'opacity:.8;padding:6px 2px'},'No backups found'))
+    return
+  }
+  list.forEach(b=>{
+    const r=el('div',{className:'tr'})
+    r.appendChild(el('div',{className:'name'},'<span class="material-icons mi">folder_zip</span>'+ (b.name+(b.mtime?' • '+b.mtime:''))))
+    r.appendChild(el('div',null,fmtSize(b.size_bytes)))
+    const acts=el('div',{className:'actions'})
+    const dl=el('button',{className:'btn sm'},'Download')
+    dl.addEventListener('click',()=>{
+      const a=document.createElement('a');a.href='/backup-download?name='+encodeURIComponent(b.name);a.download=b.name;document.body.appendChild(a);a.click();a.remove()
+    })
+    acts.appendChild(dl);r.appendChild(acts);rows.appendChild(r)
+  })
+}
+function loadBackups(){api('/backups-list').then(j=>renderBackups(j.items||[])).catch(e=>toast('Error',e.message||'Failed to load backups','err'))}
+
+function withLoading(btn, text, fn){
+  const prev = btn.innerHTML
+  btn.classList.add('loading'); btn.disabled=true
+  btn.innerHTML = '<span class="spin"></span><span class="txt">'+(text||'Working…')+'</span>'
+  const done = ()=>{btn.disabled=false;btn.classList.remove('loading');btn.innerHTML=prev}
+  return Promise.resolve().then(fn).finally(done)
+}
+
+function createBackup(){
+  withLoading(btnBCreate,'Creating…',()=>fetch('/backup-create',{method:'POST'}).then(r=>r.json()).then(j=>{
+    if(j.ok){toast('Backup created',j.name||'','ok');loadBackups()}
+    else{toast('Error','Backup failed','err')}
+  }).catch(()=>toast('Error','Backup failed','err')))
+}
+
+btnSave.addEventListener('click',saveSettings)
+btnRestart.addEventListener('click',()=>{fetch('/stop').then(()=>{setTimeout(()=>{fetch('/start').then(()=>toast('Restart','Server restarting','ok')).catch(()=>toast('Error','Start failed','err'))},1500)}).catch(()=>toast('Error','Stop failed','err'))})
+btnStart.addEventListener('click',()=>{fetch('/start').then(()=>toast('Start','Server starting','ok')).catch(()=>toast('Error','Start failed','err'))})
+btnStop.addEventListener('click',()=>{fetch('/stop').then(()=>toast('Stop','Server stopping','ok')).catch(()=>toast('Error','Stop failed','err'))})
+btnBRefresh.addEventListener('click',loadBackups)
+btnBCreate.addEventListener('click',createBackup)
+
+document.addEventListener('DOMContentLoaded',()=>{loadSettings();refreshStatus();loadBackups();setInterval(refreshStatus,4000)})
+</script>
+{% endblock %}

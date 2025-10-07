@@ -2,7 +2,8 @@
 {% block title %}Minecraft Server Dashboard{% endblock %}
 {% block head_extra %}
 <style>
-body{background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f,transparent),linear-gradient(#0a0a0a,#0a0a0a)}
+html{background:#0a0a0a}
+body{background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f 0%,transparent 60%),radial-gradient(1200px 500px at 50% 120%,#1b1b1f 0%,transparent 60%),linear-gradient(#0a0a0a,#0a0a0a)}
 p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .card{width:min(1100px,96vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
 .header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -38,6 +39,7 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .console-output .green{color:#22c55e}
 .console-output .purple{color:#a78bfa}
 .console-output .yellow{color:#facc15}
+.console-output .from-panel{color:#c084fc}
 .console-inputbar{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}
 .input{flex:1;border:1px solid var(--border);background:#111114;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
 .side{display:flex;flex-direction:column;gap:16px}
@@ -137,7 +139,22 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 .motd-chip.marquee .motd-dup{display:inline-block}
 .motd-chip.marquee .motd-inner{will-change:transform;animation:motd-loop var(--motd-dur,14s) linear infinite}
 @keyframes motd-loop{from{transform:translateX(0)} to{transform:translateX(-50%)}}
-@media (prefers-reduced-motion: reduce){.motd-chip.marquee .motd-inner{animation:none}}
+</style>
+<style>
+.sysbox{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:1000px){.stat-row{grid-template-columns:1fr}}
+.stat{border:1px solid var(--border);border-radius:10px;background:#0b0b0d;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.stat-head{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#cbd5e1}
+.stat-head b{color:#fff}
+.meter{height:12px;border-radius:999px;background:#111114;border:1px solid var(--border);overflow:hidden}
+.meter .fill{height:100%;width:0;transition:width .25s ease;background:linear-gradient(180deg,#5454ff,#3d3de6)}
+.stat-foot{font-size:12px;color:#aab1c3}
+.disk-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.disk-item{border:1px solid var(--border);border-radius:10px;background:#0b0b0d;padding:10px 12px}
+.disk-head{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#cbd5e1;margin-bottom:8px}
+.net-row{display:flex;flex-wrap:wrap;gap:8px}
+.section-metrics{grid-column:1/-1}
 </style>
 {% endblock %}
 
@@ -190,6 +207,30 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
         </div>
       </div>
     </div>
+      <div class="section section-metrics">
+        <div class="title">System Metrics</div>
+        <div class="sysbox">
+          <div class="stat-row">
+            <div class="stat">
+              <div class="stat-head"><b>CPU</b> <span id="cpu-pct">—</span></div>
+              <div class="meter"><div id="cpu-bar" class="fill"></div></div>
+              <div class="stat-foot" id="loadavg">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat-head"><b>Memory</b> <span id="mem-pct">—</span></div>
+              <div class="meter"><div id="mem-bar" class="fill"></div></div>
+              <div class="stat-foot" id="mem-detail">—</div>
+            </div>
+          </div>
+          <div class="disk-list" id="disk-list"></div>
+          <div class="net-row">
+            <span class="kit"><b>Procs</b> <span id="proc-count">—</span></span>
+            <span class="kit"><b>Uptime</b> <span id="sys-uptime">—</span></span>
+            <span class="kit"><b>Net TX</b> <span id="net-tx">—</span></span>
+            <span class="kit"><b>Net RX</b> <span id="net-rx">—</span></span>
+          </div>
+        </div>
+      </div>
   </div>
 </div>
 
@@ -208,6 +249,136 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded',()=> {
+  function humanBytes(n){
+    if(typeof n!=='number'||!isFinite(n)) return '—'
+    const u=['B','KB','MB','GB','TB','PB']
+    let i=0
+    while(n>=1024&&i<u.length-1){n/=1024;i++}
+    return n.toFixed(i?1:0)+' '+u[i]
+  }
+  function humanSeconds(s){
+    if(!s&&s!==0) return '—'
+    const d=Math.floor(s/86400)
+    s%=86400
+    const h=Math.floor(s/3600)
+    s%=3600
+    const m=Math.floor(s/60)
+    const parts=[]
+    if(d) parts.push(d+'d')
+    if(h) parts.push(h+'h')
+    if(m) parts.push(m+'m')
+    return parts.join(' ')||'0m'
+  }
+
+  // --- Peak RAM tracking ---
+  const PEAK_WINDOW_MS = 3600*1000
+  let memHistory = []
+  function recordMemSample(percent, used, total){
+    const now = Date.now()
+    memHistory.push({t:now, percent:Number(percent)||0, used:Number(used)||0, total:Number(total)||0})
+    const cutoff = now - PEAK_WINDOW_MS
+    while(memHistory.length && memHistory[0].t < cutoff) memHistory.shift()
+  }
+  function getPeakMem(){
+    if(!memHistory.length) return {percent:0, used:0, total:0}
+    let peak = memHistory[0]
+    for(const s of memHistory){ if(s.percent > peak.percent) peak = s }
+    const total = (peak.total||memHistory[memHistory.length-1].total||0)
+    const used = (peak.used || (total? total*peak.percent/100 : 0))
+    return {percent: Math.round(peak.percent), used, total}
+  }
+  function setBar(elPct, elBar, pct){
+    const p=Math.max(0,Math.min(100,Math.round(pct||0)))
+    elPct.textContent=p+'%'
+    elBar.style.width=p+'%'
+  }
+  function renderDisks(disks){
+    const wrap=document.getElementById('disk-list')
+    wrap.innerHTML=''
+    if(!disks||typeof disks!=='object') return
+    Object.keys(disks).forEach(path=>{
+      const d = disks[path] || {}
+      const isServer = /^\/?server\/?$/i.test(path)
+      const item = document.createElement('div')
+      item.className='disk-item'
+
+      const head=document.createElement('div')
+      head.className='disk-head'
+      const name=document.createElement('div')
+      const pct=document.createElement('div')
+
+      const meter=document.createElement('div')
+      meter.className='meter'
+      const fill=document.createElement('div')
+      fill.className='fill'
+      meter.appendChild(fill)
+
+      const foot=document.createElement('div')
+      foot.className='stat-foot'
+
+      if(isServer){
+        const peak = getPeakMem()
+        name.textContent = 'Peak RAM (1h)'
+        pct.textContent = (peak.percent!=null?Math.round(peak.percent):'—') + (peak.percent!=null?'%':'')
+        fill.style.width = (peak.percent!=null?Math.round(peak.percent):0) + '%'
+        foot.textContent = (peak.used && peak.total) ? humanBytes(peak.used) + ' / ' + humanBytes(peak.total) : '—'
+      } else {
+        name.textContent = path
+        pct.id='disk-pct-'+btoa(path).replace(/[^a-z0-9]/gi,'')
+        pct.textContent=(d.percent!=null?Math.round(d.percent):'—')+ (d.percent!=null?'%':'')
+        fill.style.width=(d.percent!=null?Math.round(d.percent):0)+'%'
+        foot.textContent=(d.used!=null&&d.total!=null)?humanBytes(d.used)+' / '+humanBytes(d.total):'—'
+      }
+
+      head.appendChild(name)
+      head.appendChild(pct)
+      item.appendChild(head)
+      item.appendChild(meter)
+      item.appendChild(foot)
+      wrap.appendChild(item)
+    })
+  }
+  function pollSystem(){
+    fetch('/system/metrics').then(r=>r.json()).then(m=>{
+      const cpuPct=document.getElementById('cpu-pct')
+      const cpuBar=document.getElementById('cpu-bar')
+      const memPct=document.getElementById('mem-pct')
+      const memBar=document.getElementById('mem-bar')
+      const load=document.getElementById('loadavg')
+      const memDetail=document.getElementById('mem-detail')
+      const proc=document.getElementById('proc-count')
+      const up=document.getElementById('sys-uptime')
+      const ntx=document.getElementById('net-tx')
+      const nrx=document.getElementById('net-rx')
+      setBar(cpuPct,cpuBar, m.cpu_percent)
+      const la=m.loadavg||null
+      if(m.loadavg&&typeof m.loadavg==='object') load.textContent=la?[la['1m'],la['5m'],la['15m']].map(x=>Number(x).toFixed(2)).join(' / '):'—'
+      const mem=m.memory||{}
+      const used=(typeof mem.used==='number')?mem.used:((typeof mem.total==='number'&&typeof mem.available==='number')?(mem.total-mem.available):null)
+      const mpct=(typeof mem.percent==='number')?mem.percent:(mem.total? (100*used/mem.total):null)
+      setBar(memPct,memBar,mpct)
+      recordMemSample(mpct, used, mem.total)
+      memDetail.textContent=(used!=null&&mem.total!=null)?humanBytes(used)+' / '+humanBytes(mem.total):'—'
+      if(m.disks) renderDisks(m.disks)
+      if(typeof m.processes==='number') proc.textContent=String(m.processes)
+      let upSec = null
+      if (typeof m.uptime_seconds === 'number') {
+        upSec = Math.round(m.uptime_seconds)
+      } else if (typeof m.uptime === 'number') {
+        upSec = m.uptime > 1e10 ? Math.round(m.uptime/1000) : Math.round(m.uptime)
+      } else if (typeof m.boot_time === 'number') {
+        const nowSec = Math.floor(Date.now()/1000)
+        const bootSec = m.boot_time > 1e10 ? Math.floor(m.boot_time/1000) : Math.floor(m.boot_time)
+        upSec = nowSec - bootSec
+      }
+      up.textContent = (upSec!=null && isFinite(upSec) && upSec>=0) ? humanSeconds(upSec) : '—'
+      const net=m.network||{}
+      if(typeof net.bytes_sent==='number') ntx.textContent=humanBytes(net.bytes_sent)
+      if(typeof net.bytes_recv==='number') nrx.textContent=humanBytes(net.bytes_recv)
+    }).catch(()=>{})
+  }
+  setInterval(pollSystem,2500)
+  pollSystem()
   const consoleEl=document.getElementById('console-output')
   const sendBtn=document.getElementById('send-command')
   const inputEl=document.getElementById('console-input')
@@ -317,6 +488,7 @@ document.addEventListener('DOMContentLoaded',()=> {
   }
 
   function colorize(line){
+    if(/\[panel\]/i.test(line)) return 'from-panel'
     if(line.includes("WARN")) return 'warn'
     if(line.includes("ERROR")) return 'error'
     if(line.includes("advancement")&&line.includes("[Server thread/INFO]")&&!line.match(/ඞ.*?ඞ/)) return 'green'

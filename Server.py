@@ -22,6 +22,11 @@ try:
 except Exception:
     requests = None
 
+try:
+    import psutil
+except Exception:
+    psutil = None
+
 app = Flask(
     __name__,
     instance_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance'),
@@ -234,6 +239,83 @@ def panel_settings_save():
     save_panel_settings(data)
     return jsonify({'ok': True})
 
+def stop_server_blocking(timeout=90):
+    global server_process
+    _write_state(phase='stopping')
+    _append_console("[panel] restart: stop begin")
+    if not server_process or not server_process.stdin:
+        save_server_status(False)
+        server_process = None
+        _append_console("[panel] restart: nothing to stop")
+        return True
+    try:
+        try:
+            server_process.stdin.write('/say The server will shutdown in 10 seconds\n')
+            server_process.stdin.flush()
+            time.sleep(7)
+            for remaining in range(3, 0, -1):
+                server_process.stdin.write(f'/say Stopping server in {remaining} \n')
+                server_process.stdin.flush()
+                time.sleep(1)
+            server_process.stdin.write('stop\n')
+            server_process.stdin.flush()
+        except Exception:
+            pass
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            if server_process.poll() is not None:
+                break
+            time.sleep(0.5)
+        if server_process and server_process.poll() is None:
+            _append_console("[panel] restart: terminate")
+            try: server_process.terminate()
+            except Exception: pass
+            t1 = time.time()
+            while time.time() - t1 < 10:
+                if server_process.poll() is not None:
+                    break
+                time.sleep(0.5)
+        if server_process and server_process.poll() is None:
+            _append_console("[panel] restart: kill")
+            try: server_process.kill()
+            except Exception: pass
+        save_server_status(False)
+        _write_state(phase='stopped')
+    finally:
+        server_process = None
+        _append_console("[panel] restart: stop done")
+        return True
+
+def graceful_restart_with_options(do_backup=False):
+    with panel_restart_lock:
+        _append_console("[panel] restart: begin")
+        _write_state(phase='restarting')
+        if do_backup:
+            try:
+                p = backup_server_folder()
+                _append_console(f"[panel] restart: backup {os.path.basename(p) if p else 'none'}")
+            except Exception:
+                _append_console("[panel] restart: backup failed")
+        stop_server_blocking(timeout=90)
+        _write_state(phase='starting')
+        time.sleep(1.0)
+        _append_console("[panel] restart: starting")
+        start_server()
+        _append_console("[panel] restart: issued start")
+
+@app.route('/restart', methods=['POST'])
+def restart_server():
+    do_backup = bool(get_panel_settings().get('backup_on_restart', False))
+    def run():
+        try:
+            graceful_restart_with_options(do_backup)
+        except Exception as e:
+            import traceback
+            _append_console(f"[panel] restart: exception {e}")
+            _append_console(traceback.format_exc())
+    Thread(target=run, daemon=True).start()
+    return jsonify({'ok': True})
+
 def get_panel_settings():
     db = get_db()
     db.execute('CREATE TABLE IF NOT EXISTS panel_settings (key TEXT PRIMARY KEY, val TEXT NOT NULL)')
@@ -284,8 +366,8 @@ def backup_server_folder():
         return None
     out_dir = os.path.join(app.instance_path, 'server-backups')
     os.makedirs(out_dir, exist_ok=True)
-    ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-    base = os.path.join(out_dir, f'backup-{ts}')
+    ts = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+    base = os.path.join(out_dir, f'Backup {ts}')
     archive = shutil.make_archive(base, 'zip', src)
     keep = max(1, int(get_panel_settings().get('backup_keep', 5)))
     files = sorted([os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.endswith('.zip')])
@@ -321,6 +403,7 @@ def watchdog_loop():
                         d = int(s.get('restart_delay_sec', 10))
                         time.sleep(max(0, d))
                         if read_server_status() and not is_process_alive():
+                            _write_state(phase='starting')
                             start_server()
                 time.sleep(2)
             except Exception:
@@ -846,43 +929,44 @@ def java_major():
 def start_server():
     with app.app_context():
         global server_process, SERVER_START_TS
+        if is_process_alive():
+            _append_console("[panel] start: already running")
+            _write_state(phase='running', server_running=True)
+            return
         if not os.path.isfile(jar_path):
+            _append_console("[panel] start: jar missing")
             return
         ver = java_major()
         if ver is None:
-            _append_console('Error: Java not found. Install Java 21+ or set JAVA_CMD.')
+            _append_console("Error: Java not found. Install Java 21+ or set JAVA_CMD.")
+            _write_state(phase='starting', server_running=True)
             return
         if ver < 21:
-            _append_console(f'Error: Java {ver} detected. This server requires Java 21+. Install Java 21 and set JAVA_CMD or upgrade PATH.')
+            _append_console(f"Error: Java {ver} detected. This server requires Java 21+.")
             return
         save_server_status(True)
-        if server_process is None or server_process.poll() is not None:
-            try:
-                s = get_panel_settings()
-                xms = max(256, int(s.get('min_ram_mb', 1024)))
-                xmx = max(xms, int(s.get('max_ram_mb', 2048)))
-                jextra = str(s.get('jvm_extra','')).strip()
-                args = [JAVA_CMD, f'-Xmx{xmx}M', f'-Xms{xms}M']
-                if jextra:
-                    args += jextra.split()
-                args += ['-jar', jar_filename, 'nogui']
-                server_process = subprocess.Popen(
-                    args,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    cwd=server_files_dir
-                )
-                SERVER_START_TS = time.time()
-                threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
-            except Exception as e:
-                _append_console(f"Server start error: {e}")
+        try:
+            s = get_panel_settings()
+            xms = max(256, int(s.get('min_ram_mb', 1024)))
+            xmx = max(xms, int(s.get('max_ram_mb', 2048)))
+            jextra = str(s.get('jvm_extra','')).strip()
+            args = [JAVA_CMD, f'-Xmx{xmx}M', f'-Xms{xms}M']
+            if jextra: args += jextra.split()
+            args += ['-jar', jar_filename, 'nogui']
+            server_process = subprocess.Popen(
+                args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, cwd=server_files_dir
+            )
+            SERVER_START_TS = time.time()
+            threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
+            _append_console("[panel] start: process spawned")
+        except Exception as e:
+            _append_console(f"Server start error: {e}")
 
 @app.route('/start')
 def start_minecraft_server():
     Thread(target=start_server, daemon=True).start()
-    return "Minecraft Server wird gestartet..."
+    return "Starting the Minecraft Server..."
 
 def stop_server_async():
     global server_process
@@ -907,6 +991,7 @@ def stop_server_async():
 def stop_minecraft_server():
     global server_process
     save_server_status(False)
+    _write_state(phase='stopped')
     if server_process is not None and server_process.stdin:
         Thread(target=stop_server_async, daemon=True).start()
         return jsonify({"message": "Minecraft Server shutdown initiated."})
@@ -1019,13 +1104,192 @@ def accept_eula():
     except Exception:
         return "Ein Fehler ist aufgetreten."
 
+STATE_PATH = os.path.join(app.instance_path, 'server_status.json')
+
+def _read_state():
+    if os.path.exists(STATE_PATH):
+        with open(STATE_PATH, 'r') as f:
+            return json.load(f)
+    return {'server_running': False, 'phase': 'stopped'}
+
+def _write_state(**updates):
+    os.makedirs(app.instance_path, exist_ok=True)
+    cur = _read_state()
+    cur.update({k: v for k, v in updates.items() if v is not None})
+    with open(STATE_PATH, 'w') as f:
+        json.dump(cur, f)
+
+def save_server_status(status):
+    _write_state(server_running=status)
+
+def read_server_status():
+    return _read_state().get('server_running', False)
+
+
+# ---- BEGIN system metrics endpoints ----
+def _read_uptime_seconds():
+    try:
+        with open('/proc/uptime','r') as f:
+            return int(float(f.read().split()[0]))
+    except Exception:
+        return 0
+
+def _meminfo_fallback():
+    out = {}
+    try:
+        with open('/proc/meminfo','r') as f:
+            for line in f:
+                if ":" in line:
+                    k,v = line.split(":",1)
+                    try:
+                        out[k.strip()] = int(v.strip().split()[0]) * 1024
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    total = out.get('MemTotal')
+    available = out.get('MemAvailable') or out.get('MemFree')
+    used = total - available if total and available else None
+    percent = int((used/total)*100) if used and total else None
+    swap_total = out.get('SwapTotal')
+    swap_free = out.get('SwapFree')
+    swap_used = swap_total - swap_free if swap_total and swap_free else None
+    swap_percent = int((swap_used/swap_total)*100) if swap_used and swap_total else None
+    return {
+        'total': total,
+        'available': available,
+        'used': used,
+        'free': out.get('MemFree'),
+        'percent': percent,
+        'swap': {
+            'total': swap_total,
+            'used': swap_used,
+            'free': swap_free,
+            'percent': swap_percent
+        }
+    }
+
+def _disk_usage_fallback(path):
+    try:
+        st = os.statvfs(path)
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        used = total - free
+        percent = int((used/total)*100) if total else None
+        return {'path': path, 'total': total, 'used': used, 'free': free, 'percent': percent}
+    except Exception:
+        return {'path': path, 'total': None, 'used': None, 'free': None, 'percent': None}
+
+def get_system_metrics():
+    cpu_percent = None
+    loadavg = None
+    mem = None
+    swap = None
+    disks = {}
+    net = None
+    procs = None
+    try:
+        loadavg = os.getloadavg()
+    except Exception:
+        loadavg = None
+    if psutil:
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.2)
+        except Exception:
+            cpu_percent = None
+        try:
+            vm = psutil.virtual_memory()
+            sm = psutil.swap_memory()
+            mem = {
+                'total': vm.total,
+                'available': vm.available,
+                'used': vm.used,
+                'free': vm.free,
+                'percent': int(vm.percent)
+            }
+            swap = {
+                'total': sm.total,
+                'used': sm.used,
+                'free': sm.free,
+                'percent': int(sm.percent)
+            }
+        except Exception:
+            mem = None
+        for p in {'/': '/', 'instance': app.instance_path, 'server': server_files_dir}:
+            path = p if isinstance(p, str) else p
+            try:
+                du = psutil.disk_usage(path)
+                disks[path] = {'path': path, 'total': du.total, 'used': du.used, 'free': du.free, 'percent': int(du.percent)}
+            except Exception:
+                disks[path] = _disk_usage_fallback(path)
+        try:
+            io = psutil.net_io_counters()
+            net = {'bytes_sent': io.bytes_sent, 'bytes_recv': io.bytes_recv, 'packets_sent': io.packets_sent, 'packets_recv': io.packets_recv}
+        except Exception:
+            net = None
+        try:
+            procs = len(psutil.pids())
+        except Exception:
+            procs = None
+    else:
+        meminfo = _meminfo_fallback()
+        mem = {k: meminfo.get(k) for k in ['total','available','used','free','percent']}
+        swap = meminfo.get('swap')
+        for path in ['/', app.instance_path, server_files_dir]:
+            disks[path] = _disk_usage_fallback(path)
+    return {
+        'cpu_percent': cpu_percent,
+        'loadavg': {'1m': loadavg[0], '5m': loadavg[1], '15m': loadavg[2]} if loadavg else None,
+        'memory': mem,
+        'swap': swap,
+        'disks': disks,
+        'network': net,
+        'processes': procs,
+        'uptime_seconds': _read_uptime_seconds(),
+        'timestamp': int(time.time())
+    }
+
+@app.route('/system/metrics')
+def system_metrics():
+    return jsonify(get_system_metrics())
+
+@app.route('/system/cpu')
+def system_cpu():
+    m = get_system_metrics()
+    return jsonify({'cpu_percent': m.get('cpu_percent'), 'loadavg': m.get('loadavg')})
+
+@app.route('/system/memory')
+def system_memory():
+    m = get_system_metrics()
+    return jsonify({'memory': m.get('memory'), 'swap': m.get('swap')})
+
+@app.route('/system/storage')
+def system_storage():
+    m = get_system_metrics()
+    disks = m.get('disks') or {}
+    server_paths = {server_files_dir, '/server', '/server/'}
+    filtered = {k: v for k, v in disks.items() if k not in {'server', 'Server'} and ((v or {}).get('path') not in server_paths)}
+    return jsonify({'disks': filtered})
+
+@app.route('/healthz')
+def healthz():
+    alive = is_process_alive()
+    st = _read_state()
+    return jsonify({'ok': True, 'server_alive': alive, 'status': st.get('phase'), 'uptime_system_seconds': _read_uptime_seconds()})
+# ---- END system metrics endpoints ----
+
 @app.route('/server-status')
 def server_status():
-    running_flag = read_server_status()
+    st = _read_state()
+    running_flag = st.get('server_running', False)
+    phase = st.get('phase')
     alive = is_process_alive()
     port_ok = is_port_open(port=25565) if alive else False
-    status = 'running' if (running_flag and alive and port_ok) else ('crashed' if running_flag and not alive else 'stopped')
-    return jsonify({'running': running_flag, 'alive': alive, 'port_open': port_ok, 'status': status})
+    if phase in {'restarting','stopping','starting'}:
+        status = phase
+    else:
+        status = 'running' if (running_flag and alive and port_ok) else ('crashed' if running_flag and not alive else 'stopped')
+    return jsonify({'running': running_flag, 'alive': alive, 'port_open': port_ok, 'status': status, 'phase': status})
 
 @app.route('/server-info')
 def server_info():

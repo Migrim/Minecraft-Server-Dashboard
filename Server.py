@@ -1127,6 +1127,51 @@ def read_server_status():
 
 
 # ---- BEGIN system metrics endpoints ----
+
+CPU_SNAPSHOT = {"total": None, "idle": None, "ts": 0}
+
+def _read_proc_stat_totals():
+    try:
+        with open('/proc/stat','r') as f:
+            line = f.readline()
+        if not line.startswith('cpu '):
+            return None, None
+        parts = [int(x) for x in line.split()[1:11]]
+        idle = parts[3] + parts[4]
+        total = sum(parts)
+        return total, idle
+    except Exception:
+        return None, None
+
+def _cpu_percent_proc(interval=0.25):
+    t1, i1 = _read_proc_stat_totals()
+    if t1 is None:
+        return None
+    time.sleep(interval)
+    t2, i2 = _read_proc_stat_totals()
+    if t2 is None:
+        return None
+    dt = t2 - t1
+    di = i2 - i1
+    if dt <= 0:
+        return None
+    used = dt - di
+    return max(0.0, min(100.0, (used / dt) * 100.0))
+
+def _cpu_percent():
+    val = None
+    if psutil:
+        try:
+            psutil.cpu_percent(None)
+            val = psutil.cpu_percent(interval=0.25)
+        except Exception:
+            val = None
+    if val is None or val == 0.0:
+        alt = _cpu_percent_proc(0.25)
+        if alt is not None:
+            val = alt
+    return val
+
 def _read_uptime_seconds():
     try:
         with open('/proc/uptime','r') as f:
@@ -1181,7 +1226,7 @@ def _disk_usage_fallback(path):
         return {'path': path, 'total': None, 'used': None, 'free': None, 'percent': None}
 
 def get_system_metrics():
-    cpu_percent = None
+    cpu_percent = _cpu_percent()
     loadavg = None
     mem = None
     swap = None
@@ -1193,10 +1238,6 @@ def get_system_metrics():
     except Exception:
         loadavg = None
     if psutil:
-        try:
-            cpu_percent = psutil.cpu_percent(interval=0.2)
-        except Exception:
-            cpu_percent = None
         try:
             vm = psutil.virtual_memory()
             sm = psutil.swap_memory()
@@ -1246,6 +1287,7 @@ def get_system_metrics():
         'network': net,
         'processes': procs,
         'uptime_seconds': _read_uptime_seconds(),
+        'cores': os.cpu_count(),
         'timestamp': int(time.time())
     }
 

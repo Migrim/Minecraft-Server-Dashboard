@@ -953,6 +953,7 @@ def start_server():
         if ver < 21:
             _append_console(f"Error: Java {ver} detected. This server requires Java 21+.")
             return
+        _write_state(phase='starting', server_running=True)
         save_server_status(True)
         try:
             s = get_panel_settings()
@@ -969,6 +970,32 @@ def start_server():
             SERVER_START_TS = time.time()
             threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
             _append_console("[panel] start: process spawned")
+            def _monitor_startup():
+                try:
+                    # Determine port from server.properties (fallback 25565)
+                    props_path = os.path.join(server_files_dir, 'server.properties')
+                    props = read_properties(props_path)
+                    try:
+                        port = int(props.get('server-port', '25565'))
+                    except Exception:
+                        port = 25565
+                    t0 = time.time()
+                    while time.time() - t0 < 120:
+                        if not is_process_alive():
+                            _write_state(phase='crashed', server_running=False)
+                            return
+                        if is_port_open(port=port):
+                            _write_state(phase='running', server_running=True)
+                            return
+                        time.sleep(0.5)
+                    # Timeout: if still alive, assume running; otherwise crashed
+                    if is_process_alive():
+                        _write_state(phase='running', server_running=True)
+                    else:
+                        _write_state(phase='crashed', server_running=False)
+                except Exception:
+                    pass
+            threading.Thread(target=_monitor_startup, daemon=True).start()
         except Exception as e:
             _append_console(f"Server start error: {e}")
 

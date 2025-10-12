@@ -17,6 +17,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import base64, hashlib, hmac, sqlite3
 import shutil
 
+from io import BytesIO
+try:
+    from PIL import Image, ImageFile, UnidentifiedImageError
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
+except Exception:
+    Image = None
+    ImageFile = None
+    UnidentifiedImageError = Exception
+
 try:
     import requests
 except Exception:
@@ -1319,6 +1328,85 @@ def healthz():
     st = _read_state()
     return jsonify({'ok': True, 'server_alive': alive, 'status': st.get('phase'), 'uptime_system_seconds': _read_uptime_seconds()})
 # ---- END system metrics endpoints ----
+
+def _process_server_icon(data_bytes: bytes, keep_aspect: bool = False) -> str:
+    if Image is None:
+        raise RuntimeError('Pillow not installed')
+    if not data_bytes or len(data_bytes) < 16:
+        raise ValueError('empty or invalid data')
+    if len(data_bytes) > 20 * 1024 * 1024:
+        raise ValueError('file too large')
+    bio = BytesIO(data_bytes)
+    try:
+        img = Image.open(bio)
+        img.load()
+    except UnidentifiedImageError:
+        raise ValueError('unsupported image format')
+    except Exception as e:
+        raise ValueError(str(e))
+    img = img.convert('RGBA')
+    if keep_aspect:
+        canvas = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
+        tmp = img.copy()
+        tmp.thumbnail((64, 64), Image.LANCZOS)
+        w2, h2 = tmp.size
+        ox = (64 - w2) // 2
+        oy = (64 - h2) // 2
+        canvas.paste(tmp, (ox, oy))
+        img = canvas
+    else:
+        w, h = img.size
+        if w != h:
+            side = min(w, h)
+            left = (w - side) // 2
+            top = (h - side) // 2
+            img = img.crop((left, top, left + side, top + side))
+        img = img.resize((64, 64), Image.LANCZOS)
+    os.makedirs(server_files_dir, exist_ok=True)
+    out_path = os.path.join(server_files_dir, 'server-icon.png')
+    img.save(out_path, format='PNG')
+    return out_path
+
+@app.route('/server-icon', methods=['GET','POST'])
+def server_icon_route():
+    if request.method == 'GET':
+        p = os.path.join(server_files_dir, 'server-icon.png')
+        raw = request.args.get('raw')
+        if raw == '1' and os.path.isfile(p):
+            return send_file(p, mimetype='image/png')
+        exists = os.path.isfile(p)
+        size = None
+        if exists:
+            try:
+                st = os.stat(p)
+                size = st.st_size
+            except Exception:
+                size = None
+        return jsonify({'exists': exists, 'size': size})
+    keep_aspect = False
+    val = request.form.get('keep_aspect') or (request.json.get('keep_aspect') if request.is_json else None)
+    if isinstance(val, str) and val.lower() in {'1','true','yes','on'}:
+        keep_aspect = True
+    if 'file' in request.files:
+        f = request.files['file']
+        blob = f.read()
+    else:
+        url = request.form.get('url') or (request.json.get('url') if request.is_json else None)
+        if url and requests is not None:
+            r = requests.get(url, timeout=10)
+            if not r.ok:
+                return jsonify({'ok': False, 'error': 'download failed'}), 400
+            ctype = (r.headers.get('Content-Type') or '').lower()
+            if 'image' not in ctype and not url.lower().endswith(('.png','.jpg','.jpeg','.webp','.bmp','.gif','.tiff','.tif','.heic','.heif')):
+                return jsonify({'ok': False, 'error': 'url is not an image'}), 400
+            blob = r.content
+        else:
+            return jsonify({'ok': False, 'error': 'no file or url'}), 400
+    try:
+        _process_server_icon(blob, keep_aspect=keep_aspect)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @app.route('/server-status')
 def server_status():

@@ -10,83 +10,61 @@
 <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <style>
 :root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:#4f46e5;--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22}
-
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:#0a0a0a;color:var(--text);font-family:Roboto,system-ui,Segoe UI,Arial,sans-serif}
-
-/* Sticky navbar */
-.nav-outer{
-  position:sticky;
-  top:0;
-  z-index:100;
-  backdrop-filter:saturate(120%) blur(10px);
-  background:rgba(14,14,17,.72);
-  border-bottom:1px solid var(--border);
-}
-.nav-outer::before{
-  content:"";
-  position:absolute;inset:0 0 auto 0;height:1px;opacity:.7;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);
-}
-.nav-inner{
-  width:min(1100px,96vw);
-  margin:0 auto;
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 4px;
-}
-.nav-inner .brand{
-  margin-right:auto;
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:4px 8px;
-  border-radius:8px;
-  color:#fff;
-  text-decoration:none;
-  font-weight:600;
-  font-size:14px;
-}
-.nav{
-  display:flex;
-  align-items:center;
-  gap:6px;
-}
-.nav a{
-  color:#cbd5e1;
-  text-decoration:none;
-  padding:6px 10px;
-  border-radius:8px;
-  border:1px solid transparent;
-  font-size:13px;
-  transition:background .18s ease,border-color .18s ease,color .18s ease;
-}
+.nav-outer{position:sticky;top:0;z-index:100;backdrop-filter:saturate(120%) blur(10px);background:rgba(14,14,17,.72);border-bottom:1px solid var(--border)}
+.nav-outer::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;opacity:.7;background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent)}
+.nav-inner{width:min(1100px,96vw);margin:0 auto;display:flex;align-items:center;gap:8px;padding:6px 4px}
+.brand-wrap{display:flex;align-items:center;gap:10px;margin-right:auto}
+#navIcon{width:24px;height:24px;border-radius:6px;overflow:hidden;display:inline-block;background:#17171b;border:1px solid #23232a;flex:0 0 auto;position:relative;cursor:pointer}
+#navIcon img{width:100%;height:100%;display:block;object-fit:cover}
+#navIcon .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:#cbd5e1}
+.nav-inner .brand{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:8px;color:#fff;text-decoration:none;font-weight:600;font-size:14px}
+.nav{display:flex;align-items:center;gap:6px}
+.nav a{color:#cbd5e1;text-decoration:none;padding:6px 10px;border-radius:8px;border:1px solid transparent;font-size:13px;transition:background .18s ease,border-color .18s ease,color .18s ease}
 .nav a:hover{background:#141418;border-color:#22242b}
 .nav a.active{color:#fff;border-color:#2a2a33;background:#141418}
-
-/* Drop shadow only after scrolling */
-.nav-outer.scrolled{
-  box-shadow:0 8px 30px rgba(0,0,0,.35);
-}
-
-/* Page container */
-.container{
-  padding:24px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
+.nav-outer.scrolled{box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.container{padding:24px;display:flex;align-items:center;justify-content:center}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:200}
+.modal{width:min(740px,96vw);background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+.modal-title{font-size:15px;font-weight:600}
+.modal-body{display:grid;grid-template-columns:1fr 300px;gap:16px;padding:16px}
+@media (max-width:860px){.modal-body{grid-template-columns:1fr}}
+.section{background:#0d0d0f;border:1px solid var(--border);border-radius:10px;padding:12px}
+.preview-wrap{width:256px;max-width:100%;margin:0 auto}
+.square{width:256px;height:256px;border-radius:12px;border:1px solid var(--border);background:#0b0b0d;overflow:hidden;position:relative}
+.crop-stage{position:absolute;inset:0;overflow:hidden}
+.crop-img{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);transform-origin:center center;user-select:none;pointer-events:none;will-change:transform;image-rendering:pixelated;image-rendering:crisp-edges}
+.ghost-grid{position:absolute;inset:0;background-image:linear-gradient(to right,rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,.04) 1px,transparent 1px);background-size:20px 20px;mix-blend:screen}
+.controls{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+.control-row{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center}
+.control-row label{font-size:12px;color:var(--muted)}
+.control-row input[type="range"]{width:100%}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.meta .kv{display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1;background:#0c0c10;border:1px solid var(--border);border-radius:8px;padding:8px}
+.actions{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--border)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#121217;color:#fff;text-decoration:none;font-size:13px}
+.btn:hover{background:#16161c;border-color:#2a2a33}
+.btn.primary{background:linear-gradient(180deg,#4f46e5,#4338ca);border-color:#3b35b6}
+.btn.primary:hover{filter:brightness(1.02)}
+.hidden{display:none}
+.badge-new{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#10b981;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);padding:2px 6px;border-radius:999px}
 </style>
 {% block head_extra %}{% endblock %}
 </head>
 <body>
 <header class="nav-outer" id="nav">
   <div class="nav-inner">
-    <a href="{{ url_for('dashboard') }}" class="brand">
-      Minecraft Server
-    </a>
+    <div class="brand-wrap">
+      <div id="navIcon" title="Change server icon">
+        <img id="navIconImg" alt="server icon">
+        <div class="ph"></div>
+      </div>
+      <a href="{{ url_for('dashboard') }}" class="brand">Minecraft Server</a>
+    </div>
     <nav class="nav">
       <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint=='dashboard' %}active{% endif %}">Dashboard</a>
       <a href="{{ url_for('files') }}" class="{% if request.endpoint=='files' %}active{% endif %}">Files</a>
@@ -101,13 +79,171 @@ body{margin:0;background:#0a0a0a;color:var(--text);font-family:Roboto,system-ui,
   {% block content %}{% endblock %}
 </div>
 
+<div class="modal-backdrop" id="iconModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Server Icon</div>
+      <button class="btn" id="iconClose"><span class="material-icons" style="font-size:18px">close</span>Close</button>
+    </div>
+    <div class="modal-body">
+      <div class="section">
+        <div class="preview-wrap">
+          <div class="square">
+            <div class="crop-stage">
+              <img id="cropImg" class="crop-img" alt="">
+              <div class="ghost-grid"></div>
+            </div>
+          </div>
+          <div class="controls">
+            <div class="control-row">
+              <label for="keepAspect">Keep</label>
+              <input id="keepAspect" type="checkbox">
+            </div>
+            <div class="control-row">
+              <label for="zoom">Zoom</label>
+              <input id="zoom" type="range" min="1" max="3" step="0.01" value="1" disabled>
+            </div>
+            <div class="control-row">
+              <label for="posX">X</label>
+              <input id="posX" type="range" min="-200" max="200" step="1" value="0" disabled>
+            </div>
+            <div class="control-row">
+              <label for="posY">Y</label>
+              <input id="posY" type="range" min="-200" max="200" step="1" value="0" disabled>
+            </div>
+          </div>
+          <div class="meta">
+            <div class="kv"><span>Target</span><span>64×64 PNG</span></div>
+            <div class="kv"><span>Method</span><span>Server-side</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="section" style="display:flex;flex-direction:column;gap:10px">
+        <input id="iconFile" type="file" accept="image/*">
+        <div style="font-size:12px;color:var(--muted)">Upload any image. Use zoom and position to preview. Saving converts to a centered square 64×64 PNG.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="centerBtn"><span class="material-icons" style="font-size:18px">crop_square</span>Center</button>
+          <button class="btn" id="resetBtn"><span class="material-icons" style="font-size:18px">restart_alt</span>Reset</button>
+        </div>
+      </div>
+    </div>
+    <div id="statusBar" style="margin:0 16px 10px 16px;padding:8px 12px;border-radius:8px;font-size:13px;color:#cbd5e1;background:#0f0f12;border:1px solid var(--border);display:none"></div>
+    <div class="actions">
+      <button class="btn" id="iconCancel">Cancel</button>
+      <button class="btn primary" id="iconSave"><span class="material-icons" style="font-size:18px">save</span>Save</button>
+    </div>
+  </div>
+</div>
+
+
 <script>
 const nav=document.getElementById('nav')
-function onScroll(){
-  if(window.scrollY>4){nav.classList.add('scrolled')}else{nav.classList.remove('scrolled')}
+function onScroll(){if(window.scrollY>4){nav.classList.add('scrolled')}else{nav.classList.remove('scrolled')}}
+document.addEventListener('scroll',onScroll,{passive:true});onScroll()
+
+const navIcon=document.getElementById('navIcon')
+const navIconImg=document.getElementById('navIconImg')
+function loadNavIcon(){const u='/server-icon?raw=1&cb='+Date.now();navIconImg.onload=()=>{navIcon.querySelector('.ph').classList.add('hidden')};navIconImg.onerror=()=>{navIcon.querySelector('.ph').classList.remove('hidden')};navIconImg.src=u}
+loadNavIcon()
+
+const modal=document.getElementById('iconModal')
+const iconClose=document.getElementById('iconClose')
+const iconCancel=document.getElementById('iconCancel')
+const iconSave=document.getElementById('iconSave')
+const iconFile=document.getElementById('iconFile')
+const cropImg=document.getElementById('cropImg')
+const zoom=document.getElementById('zoom')
+const posX=document.getElementById('posX')
+const posY=document.getElementById('posY')
+const centerBtn=document.getElementById('centerBtn')
+const resetBtn=document.getElementById('resetBtn')
+const keepAspectEl=document.getElementById('keepAspect')
+const statusBar=document.getElementById('statusBar')
+function setStatus(msg,type='info'){
+  statusBar.style.display='block'
+  statusBar.textContent=msg
+  statusBar.style.color= type==='error'? '#f87171': (type==='success'? '#10b981':'#cbd5e1')
 }
-document.addEventListener('scroll',onScroll,{passive:true})
-onScroll()
+
+let currentFile=null
+let z=1, x=0, y=0
+let keepAspect=false
+
+function openModal(){
+  statusBar.style.display='none'
+  modal.style.display='flex'
+}
+function closeModal(){modal.style.display='none'}
+function setTransform(){cropImg.style.transform='translate(calc(-50% + '+x+'px),calc(-50% + '+y+'px)) scale('+z+')'}
+function enableControls(v){zoom.disabled=!v;posX.disabled=!v;posY.disabled=!v}
+function fitImageToSquare(){
+  const box=256
+  const iw=cropImg.naturalWidth||0
+  const ih=cropImg.naturalHeight||0
+  if(!iw||!ih)return
+  const s=Math.min(box/iw, box/ih)
+  z=s
+  x=0
+  y=0
+  zoom.value=z
+  posX.value=x
+  posY.value=y
+  setTransform()
+}
+
+navIcon.addEventListener('click',openModal)
+iconClose.addEventListener('click',closeModal)
+iconCancel.addEventListener('click',closeModal)
+modal.addEventListener('click',e=>{if(e.target===modal)closeModal()})
+
+iconFile.addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return
+  currentFile=f
+  const url=URL.createObjectURL(f)
+  cropImg.src=url
+  z=1;x=0;y=0
+  zoom.value=z;posX.value=x;posY.value=y
+  enableControls(true)
+  setTransform()
+  cropImg.onload=()=>{ if(keepAspect){ fitImageToSquare(); } }
+})
+
+zoom.addEventListener('input',e=>{z=parseFloat(e.target.value);setTransform()})
+posX.addEventListener('input',e=>{x=parseInt(e.target.value,10);setTransform()})
+posY.addEventListener('input',e=>{y=parseInt(e.target.value,10);setTransform()})
+centerBtn.addEventListener('click',e=>{e.preventDefault();x=0;y=0;posX.value=0;posY.value=0;setTransform()})
+resetBtn.addEventListener('click',e=>{e.preventDefault();iconFile.value='';currentFile=null;cropImg.removeAttribute('src');enableControls(false)})
+
+iconSave.addEventListener('click',async()=>{
+  if(!currentFile){setStatus('Choose an image first','error');return}
+  const fd=new FormData()
+  fd.append('file',currentFile)
+  fd.append('zoom',String(z))
+  fd.append('offset_x',String(x))
+  fd.append('offset_y',String(y))
+  fd.append('fit', keepAspect? '1':'0')
+  try{
+    const r=await fetch('/server-icon',{method:'POST',body:fd})
+    const j=await r.json()
+    if(!r.ok||!j.ok){setStatus(j.error||'Failed','error');return}
+    loadNavIcon()
+    setStatus('Icon updated','success')
+    closeModal()
+  }catch(err){setStatus('Network error','error')}
+})
+
+keepAspectEl.addEventListener('change',e=>{
+  keepAspect=e.target.checked
+  if(keepAspect){
+    enableControls(false)
+    fitImageToSquare()
+  }else{
+    enableControls(true)
+    z=1;x=0;y=0
+    zoom.value=z;posX.value=x;posY.value=y
+    setTransform()
+  }
+})
 </script>
 {% block scripts %}{% endblock %}
 </body>

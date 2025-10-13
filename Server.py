@@ -620,6 +620,22 @@ def fs_tree():
     except Exception as e:
         return jsonify({"error": str(e), "tree": []}), 500
 
+@app.route("/fs-raw")
+def fs_raw():
+    rel = request.args.get("path","")
+    try:
+        abs_p = safe_join(rel)
+        if not os.path.isfile(abs_p):
+            return "not found", 404
+        return send_file(
+            abs_p,
+            as_attachment=False,
+            download_name=os.path.basename(abs_p),
+            conditional=False
+        )
+    except ValueError:
+        return "invalid path", 400
+
 @app.route("/fs-delete", methods=["POST"])
 def fs_delete():
     data = request.get_json(force=True) or {}
@@ -757,16 +773,28 @@ def fs_mkdir():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-@app.route("/fs-download")
+@app.route("/fs-download", methods=["GET","POST"]) 
 def fs_download():
     rel = request.args.get("path","")
+    if not rel and request.is_json:
+        data = request.get_json(silent=True) or {}
+        rel = (data.get("path") or "").strip()
+    if not rel and request.form:
+        rel = (request.form.get("path") or "").strip()
     try:
         abs_p = safe_join(rel)
         if not os.path.isfile(abs_p):
             return "not found", 404
-        return send_file(abs_p, as_attachment=True, download_name=os.path.basename(abs_p))
+        return send_file(
+            abs_p,
+            as_attachment=True,
+            download_name=os.path.basename(abs_p),
+            conditional=False
+        )
     except ValueError:
         return "invalid path", 400
+    except Exception as e:
+        return str(e), 500
 
 def write_properties(path, updates):
     props = read_properties(path)

@@ -11,10 +11,11 @@ body::before{content:"";position:fixed;left:0;right:0;top:0;height:420px;backgro
 .header-right{display:flex;align-items:center;gap:10px}
 .badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
 .badge b{color:#fff}
-.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease;display:inline-flex;align-items:center;gap:8px}
 .btn:hover{background:#191a20}
 .btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
 .btn.primary:hover{filter:brightness(1.05)}
+.btn .mi{font-size:18px;line-height:0;opacity:.95}
 .layout{padding:0 24px 24px;display:grid;grid-template-columns:340px 1fr;gap:16px}
 @media (max-width:1000px){.layout{grid-template-columns:1fr}}
 .panel{border:1px solid var(--border);border-radius:14px;background:#0e0e11;display:flex;flex-direction:column;min-height:520px;height:71vh;overflow:hidden}
@@ -22,12 +23,15 @@ body::before{content:"";position:fixed;left:0;right:0;top:0;height:420px;backgro
 .search{display:flex;gap:8px}
 .input{flex:1;border:1px solid var(--border);background:#111114;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
 .tree{flex:1;overflow:auto;padding:10px 12px}
-.tree ul{list-style:none;margin:0;padding:0 0 0 12px}
+.tree ul{list-style:none;margin:0;padding:0 0 0 10px}
+.tree>ul{padding-left:2px}
 .node{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;user-select:none}
 .node:hover{background:#111115}
 .node .chev{width:16px;text-align:center;opacity:.8}
 .node .ico{width:18px;opacity:.9}
-.node.file{padding-left:28px}
+.node.file{padding-left:8px}
+/* Inline rename input style */
+.rename-input{background:#111114;border:1px solid var(--border);color:#fff;border-radius:6px;padding:4px 6px;font-size:14px;min-width:120px;max-width:60%;outline:none}
 .hidden{display:none}
 .editor{display:flex;flex-direction:column;height:100%}
 .toolbar{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -55,6 +59,14 @@ textarea.editor-ta{width:100%;height:100%;border:0;outline:none;background:#0b0b
 .ctx .sep{height:1px;background:var(--border);margin:6px 4px}
 .node.dir.drop-target{outline:2px dashed #3b3be0;background:#10121a}
 *{scrollbar-width:thin;scrollbar-color:#2a2d37 transparent}
+.imgview{display:block;max-width:none;height:auto;transform-origin:center center}
+.imgview.hidden{display:none}
+/* Center images in image mode */
+.area.image-mode{display:flex;align-items:center;justify-content:center}
+/* Zoom slider style */
+.zoom{appearance:none;width:90px;height:4px;border-radius:999px;background:#2a2d37;outline:none}
+.zoom::-webkit-slider-thumb{appearance:none;width:12px;height:12px;border-radius:50%;background:#8b8dff}
+.zoom::-moz-range-thumb{width:12px;height:12px;border:none;border-radius:50%;background:#8b8dff}
 .tree::-webkit-scrollbar,.area::-webkit-scrollbar,.ctx::-webkit-scrollbar,body::-webkit-scrollbar{width:8px;height:8px}
 .tree::-webkit-scrollbar-track,.area::-webkit-scrollbar-track,.ctx::-webkit-scrollbar-track,body::-webkit-scrollbar-track{background:transparent}
 .tree::-webkit-scrollbar-thumb,.area::-webkit-scrollbar-thumb,.ctx::-webkit-scrollbar-thumb,body::-webkit-scrollbar-thumb{background:#2a2d37;border-radius:10px}
@@ -83,13 +95,15 @@ textarea.editor-ta{width:100%;height:100%;border:0;outline:none;background:#0b0b
     <div class="panel editor">
       <div class="toolbar">
         <div class="path" id="path">No file selected</div>
-        <span id="binwarn" class="tag warn hidden"><span class="material-icons mi">inventory_2</span>Binary file</span>
+        
+        <input id="zoom" class="zoom hidden" type="range" min="25" max="400" value="100" step="1">
         <input id="uploadInput" type="file" multiple class="hidden">
-        <button id="uploadBtn" class="btn">Upload</button>
-        <button id="download" class="btn">Download</button>
-        <button id="save" class="btn primary">Save</button>
+        <button id="uploadBtn" class="btn"><span class="material-icons mi">upload</span><span>Upload</span></button>
+        <button id="download" class="btn"><span class="material-icons mi">download</span><span>Download</span></button>
+        <button id="save" class="btn primary"><span class="material-icons mi">save</span><span>Save</span></button>
       </div>
       <div class="area">
+        <img id="imgview" class="imgview hidden" alt="preview">
         <textarea id="editor" class="editor-ta" spellcheck="false" placeholder="Select a file to view and edit"></textarea>
       </div>
       <div class="meta">
@@ -138,7 +152,7 @@ const treeEl=document.getElementById('tree')
 const searchEl=document.getElementById('search')
 const pathEl=document.getElementById('path')
 const metaEl=document.getElementById('meta')
-const warnEl=document.getElementById('binwarn')
+const zoomEl=document.getElementById('zoom')
 const editor=document.getElementById('editor')
 const btnSave=document.getElementById('save')
 const btnDl=document.getElementById('download')
@@ -151,6 +165,7 @@ const uploadInput=document.getElementById('uploadInput')
 const uploadBtn=document.getElementById('uploadBtn')
 const ctxRename=document.getElementById('ctx-rename')
 const ctxNewfolder=document.getElementById('ctx-newfolder')
+const imgView=document.getElementById('imgview')
 
 let currentDir=""
 let fullTree=[]
@@ -158,6 +173,7 @@ let openedPath=null
 let openedIsBinary=false
 let ctxTarget=null
 let expandedPaths=new Set()
+let openedIsImage=false
 
 function api(p,opts){
   const base=location.protocol==='file:'?'http://127.0.0.1:5003':''
@@ -184,10 +200,7 @@ function uploadFiles(fileList, targetDir){
   Array.from(fileList||[]).forEach(f=>fd.append('file',f,f.name))
   return fetch('/fs-upload',{method:'POST',body:fd})
     .then(r=>r.json())
-    .then(j=>{
-      if(j.ok){toast('Uploaded',`Uploaded ${j.saved} file(s)`,'ok');loadTree()}
-      else{throw new Error(j.error||'Upload failed')}
-    })
+    .then(j=>{ loadTree(); toast('Uploaded','Files uploaded','ok') })
     .catch(e=>toast('Error',e.message||'Upload failed','err'))
 }
 function makeDropHandlers(targetPath,row,isDir,kidsUl){
@@ -223,11 +236,24 @@ function makeDropHandlers(targetPath,row,isDir,kidsUl){
     remove()
   })
 }
+// Helper to pick a Material Icon based on file extension
+function fileIcon(name){
+  const n=(name||'').toLowerCase()
+  if(/\.(png|jpg|jpeg|gif|bmp|webp|svg)$/.test(n)) return 'image'
+  if(/\.(mp4|mkv|webm|mov|avi)$/.test(n)) return 'movie'
+  if(/\.(mp3|wav|flac|ogg|m4a)$/.test(n)) return 'audiotrack'
+  if(n.endsWith('.tar.gz')||/\.(zip|rar|7z|tar|gz|bz2|xz|jar)$/.test(n)) return 'archive'
+  if(/\.(pdf)$/.test(n)) return 'picture_as_pdf'
+  if(/\.(json|ndjson)$/.test(n)) return 'data_object'
+  if(/\.(js|ts|jsx|tsx|py|rb|go|rs|c|cpp|h|hpp|java|sh|bat|ps1|php|css|scss|less|html|htm|xml|yml|yaml|toml|ini|conf|properties)$/.test(n)) return 'code'
+  if(/\.(md|txt|log)$/.test(n) || /^readme(\.|$)/.test(n)) return 'article'
+  return 'description'
+}
 function nodeRow(n,isDir){
   const r=el('div',{className:'node'+(isDir?' dir':' file'),dataset:{path:n.path,type:isDir?'dir':'file'}})
   const chev=el('span',{className:'chev'},isDir?'<span class="material-icons" style="font-size:16px;opacity:.9">chevron_right</span>':'')
-  const ic=el('span',{innerHTML:isDir?'<span class="material-icons ico" style="font-size:16px">folder</span>':'<span class="material-icons ico" style="font-size:16px">description</span>'})
-  const txt=el('span',null,n.name)
+  const ic=el('span',{innerHTML:isDir?'<span class="material-icons ico" style="font-size:16px">folder</span>':('<span class="material-icons ico" style="font-size:16px">'+fileIcon(n.name)+'</span>')})
+  const txt=el('span',{className:'name'},n.name)
   r.appendChild(chev);r.appendChild(ic);r.appendChild(txt)
   return r
 }
@@ -265,6 +291,7 @@ function drawTree(data){
       } else {
         const row=nodeRow(item,false)
         row.addEventListener('click',()=>openFile(item.path))
+        row.addEventListener('dblclick',()=>startInlineRename(item.path))
         li.appendChild(row)
         makeDropHandlers(item.path,row,false,null)
       }
@@ -273,6 +300,35 @@ function drawTree(data){
   }
   addBranch(root,data)
   treeEl.appendChild(root)
+}
+function startInlineRename(targetPath){
+  if(!targetPath) return
+  const row = treeEl.querySelector(`.node[data-path="${CSS.escape(targetPath)}"]`)
+  if(!row) return
+  const nameSpan = row.querySelector('.name')
+  if(!nameSpan) return
+  const current = nameSpan.textContent
+  const input = document.createElement('input')
+  input.type='text'
+  input.className='rename-input'
+  input.value=current
+  nameSpan.replaceWith(input)
+  input.focus()
+  input.select()
+  let done=false
+  function finish(commit){
+    if(done) return; done=true
+    const newName=(input.value||'').trim()
+    input.replaceWith(nameSpan)
+    if(commit && newName && newName!==current && newName.indexOf('/')===-1){
+      renamePath(targetPath,newName)
+    }
+  }
+  input.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();finish(true)}
+    else if(e.key==='Escape'){e.preventDefault();finish(false)}
+  })
+  input.addEventListener('blur',()=>finish(true))
 }
 function filterTree(){
   const q=(searchEl.value||'').trim().toLowerCase()
@@ -299,14 +355,33 @@ function openFile(path){
   api('/fs-open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})})
     .then(j=>{
       openedPath=path
-      openedIsBinary=!!j.binary
-      editor.value=j.binary?'':j.content||''
-      editor.disabled=j.binary
+      const lower=String(path||'').toLowerCase()
+      openedIsImage=/(\.png|\.jpg|\.jpeg)$/.test(lower)
+      openedIsBinary=openedIsImage||!!j.binary
+
+      if(openedIsImage){
+        editor.value=''
+        editor.disabled=true
+        editor.classList.add('hidden')
+        imgView.classList.remove('hidden')
+        imgView.src='/fs-raw?path='+encodeURIComponent(path)+'&t='+(Date.now())
+        document.querySelector('.area').classList.add('image-mode');
+        zoomEl.classList.remove('hidden');
+        imgView.style.transform='scale('+(Number(zoomEl.value||'100')/100)+')'
+      }else{
+        imgView.classList.add('hidden')
+        imgView.removeAttribute('src')
+        editor.classList.remove('hidden')
+        editor.value=j.binary?'':(j.content||'')
+        editor.disabled=!!j.binary
+        document.querySelector('.area').classList.remove('image-mode');
+        zoomEl.classList.add('hidden')
+      }
+
       pathEl.textContent=path
-      warnEl.classList.toggle('hidden',!j.binary)
       metaEl.textContent=(j.size?('Size '+j.size+' bytes • '):'')+(j.mtime?('Modified '+j.mtime):'')
       setCwd(dirname(path))
-      if(j.binary) toast('Binary file','Download is available','ok')
+      if(j.binary && !openedIsImage) toast('Binary file','Download is available','ok')
     })
     .catch(err=>toast('Error',err.message||'Failed to open file','err'))
 }
@@ -317,8 +392,8 @@ function saveFile(){
     .then(r=>r.json()).then(j=>{if(j.ok){toast('Saved','File saved','ok');openFile(openedPath)}else{toast('Error',j.error||'Save failed','err')}})
     .catch(()=>toast('Error','Save failed','err'))
 }
-function downloadPath(p,t){
-  if(t!=='file'){toast('Unavailable','Download works for files','err');return}
+function downloadPath(p){
+  if(!p){toast('Unavailable','No path','err');return}
   const a=document.createElement('a')
   a.href='/fs-download?path='+encodeURIComponent(p)
   a.download=''
@@ -358,6 +433,10 @@ function createFolder(targetDir,name){
       else{toast('Error',j.error||'Create folder failed','err')}
     }).catch(e=>toast('Error',e.message||'Create folder failed','err'))
 }
+zoomEl.addEventListener('input',()=>{
+  if(!openedIsImage) return;
+  imgView.style.transform='scale('+(Number(zoomEl.value||'100')/100)+')'
+})
 function showCtx(x,y,p,t){
   ctxTarget={path:p,type:t}
   ctx.style.display='block'
@@ -370,9 +449,7 @@ function showCtx(x,y,p,t){
 }
 ctxRename.addEventListener('click',()=>{
   if(!ctxTarget)return
-  const curr=basename(ctxTarget.path)||""
-  const name=prompt('New name',curr)
-  if(name&&name.trim()&&name.indexOf('/')===-1){renamePath(ctxTarget.path,name.trim())}
+  startInlineRename(ctxTarget.path)
   hideCtx()
 })
 ctxNewfolder.addEventListener('click',()=>{
@@ -406,7 +483,7 @@ ctxOpen.addEventListener('click',()=>{
 })
 ctxDownload.addEventListener('click',()=>{
   if(!ctxTarget)return
-  downloadPath(ctxTarget.path,ctxTarget.type)
+  downloadPath(ctxTarget.path)
   hideCtx()
 })
 ctxDelete.addEventListener('click',()=>{
@@ -423,7 +500,7 @@ ctxUpload.addEventListener('click',()=>{
 })
 searchEl.addEventListener('input',filterTree)
 btnSave.addEventListener('click',saveFile)
-btnDl.addEventListener('click',()=>{if(openedPath)downloadPath(openedPath,openedIsBinary?'bin':'file')})
+btnDl.addEventListener('click',()=>{if(openedPath)downloadPath(openedPath)})
 uploadBtn.addEventListener('click',()=>uploadInput.click())
 uploadInput.addEventListener('change',e=>{
   if(e.target.files && e.target.files.length) uploadFiles(e.target.files,currentDir)

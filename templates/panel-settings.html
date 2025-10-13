@@ -18,9 +18,14 @@ body::before{content:"";position:fixed;left:0;right:0;top:0;height:420px;backgro
 .layout{padding:0 24px 24px;display:grid;grid-template-columns:340px 1fr;gap:16px}
 @media (max-width:1000px){.layout{grid-template-columns:1fr}}
 .panel{border:1px solid var(--border);border-radius:14px;background:#0e0e11;display:flex;flex-direction:column;min-height:auto;height:auto;overflow:hidden}
-.panel .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.section{padding:10px 12px;border-bottom:1px solid var(--border)}
-.section:last-child{border-bottom:none}
+.panel .title{padding:12px 14px;border-bottom:0;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.section{padding:10px 12px;border:0;background:transparent}
+.section + .section{border-top:1px solid var(--border)}
+.title + .section{border-top:0}
+.panel .section{border-radius:0}
+.panel .section:first-of-type{border-top-left-radius:14px;border-top-right-radius:14px}
+.panel .section:last-of-type{border-bottom-left-radius:14px;border-bottom-right-radius:14px}
+.panel .section:not(:first-of-type):not(:last-of-type){border-radius:0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:720px){.grid2{grid-template-columns:1fr}}
 .row{display:grid;grid-template-columns:220px 1fr;align-items:center;gap:10px;margin-bottom:8px}
@@ -41,7 +46,7 @@ input[type=number]{ -moz-appearance:textfield; appearance:textfield }
 .kv .k{color:#9aa0ab}
 .stat{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border)}
 .stat:last-child{border-bottom:none}
-.dot{width:10px;height:10px;border-radius:999px;background:#444;border:1px solid #2a2ae}
+.dot{width:10px;height:10px;border-radius:999px;background:#444;border:1px solid #2a2ae2}
 .dot.ok{background:#22c55e;border-color:#1d3b29}
 .dot.bad{background:#ef4444;border-color:#3a1f22}
 .dot.blink{animation:dot-blink 1.2s ease-in-out infinite}
@@ -69,15 +74,40 @@ input[type=number]{ -moz-appearance:textfield; appearance:textfield }
 .switch input:checked + .slider{background:#3b3be0;border-color:#2f2fb5}
 .switch input:checked + .slider:before{transform:translate(20px,-50%)}
 .help{margin-left:8px}
-.table{display:block;width:100%;padding:8px;border-top:0;max-height:unset;overflow:visible;background:transparent;scrollbar-width:thin;scrollbar-color:#2a2d37 transparent}
+.table{display:block;width:100%;padding:8px;border:0;background:transparent;max-height:unset;overflow:visible;scrollbar-width:thin;scrollbar-color:#2a2d37 transparent}
 .table::-webkit-scrollbar{width:8px;height:8px}
 .table::-webkit-scrollbar-track{background:transparent}
 .table::-webkit-scrollbar-thumb{background:#2a2d37;border-radius:10px}
 .table::-webkit-scrollbar-thumb:hover{background:#343949}
 
-.tr{display:grid;grid-template-columns:1fr 100px 160px;gap:14px;align-items:center;background:#0f0f12;border:1px solid #141418;border-radius:10px;padding:10px 12px;min-height:56px}
-.tr:hover{background:#111116;border-color:#1a1b22}
+.tr{display:grid;grid-template-columns:1fr 100px 160px;gap:14px;align-items:center;background:#0f0f12;border:1px solid #141418;border-top-color:transparent;border-radius:10px;padding:10px 12px;min-height:56px}
+.tr:hover{background:#111116;border-color:#1a1b22;border-top-color:transparent}
 .th{opacity:.8;font-size:12px;background:transparent;border:0;margin:0 0 6px}
+
+.modal{position:fixed;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,.55);display:none;z-index:2147483647 !important;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.modal .box{width:min(560px,95vw);background:#0f0f12;border:1px solid #141418;border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.5);overflow:hidden}
+.modal .box .hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600}
+.modal .box .bd{padding:12px 14px}
+.checklist{display:flex;flex-direction:column;gap:10px;margin:8px 0}
+.step{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #141418;border-radius:10px;background:#0e0e11}
+.step .mi{font-size:18px}
+.step .t{flex:1}
+.step.pending{opacity:.7}
+.step.active{border-color:#2f2fb5}
+.step.done{border-color:#1f3f28}
+.step.err{border-color:#3a1f22}
+.modal .ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-top:1px solid var(--border)}
+.modal.show .box{animation:pop .18s ease}
+@keyframes pop{0%{transform:scale(.98);opacity:.0}100%{transform:scale(1);opacity:1}}
+.step{position:relative}
+.step .dot-mini{width:10px;height:10px;border-radius:50%;border:1px solid #2a2a33;background:#2a2a33}
+.step .dot-mini.ok{background:#22c55e;border-color:#1f3f28}
+.step .dot-mini.err{background:#ef4444;border-color:#3a1f22}
+.step.active .dot-mini{background:#3b3be0;border-color:#2f2fb5}
+.step .spin-sm{display:none;width:14px;height:14px;border:2px solid #cbd5e1;border-right-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
+.step.active .spin-sm{display:inline-block}
+.step.active{box-shadow:0 0 0 2px rgba(63,63,230,.18) inset}
 
 #backup-rows{
   --row-h:56px;
@@ -99,6 +129,13 @@ input[type=number]{ -moz-appearance:textfield; appearance:textfield }
 .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
 .name .mi{font-size:18px;opacity:.9}
 .btn.sm{padding:8px 10px;font-size:12px;border-radius:8px}
+.btn.icon{display:inline-flex;align-items:center;gap:6px}
+.btn.warn{border-color:#3a1f22}
+.btn.danger{border-color:#3a1f22;background:#1a0f10}
+.btn.danger:hover{filter:brightness(1.05)}
+.btn.success{border-color:#1f3f28}
+.btn.flat{background:#151518}
+.btn.icon .mi{margin-right:0}
 .section.backups{padding-top:28px}
 .section.backups .table{margin-top:18px}
 .btn.loading{opacity:.8;pointer-events:none;position:relative}
@@ -256,6 +293,36 @@ input[type=number]{ -moz-appearance:textfield; appearance:textfield }
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
+
+<div id="confirm-modal" class="modal">
+  <div class="box">
+    <div class="hd">Confirm Restore</div>
+    <div class="bd"><div id="confirm-msg">Are you sure?</div></div>
+    <div class="ft">
+      <button id="confirm-cancel" class="btn">Cancel</button>
+      <button id="confirm-yes" class="btn primary">Yes, restore</button>
+    </div>
+  </div>
+</div>
+
+<div id="restore-modal" class="modal">
+  <div class="box">
+    <div class="hd">Restoring Backup<div id="restore-sub" class="small">Working…</div></div>
+    <div class="bd">
+      <div class="checklist">
+        <div class="step pending" data-step="locking"><span class="dot-mini"></span><span class="material-icons mi">lock</span><div class="t">Locking panel</div><span class="spin-sm"></span></div>
+        <div class="step pending" data-step="stopping"><span class="dot-mini"></span><span class="material-icons mi">stop_circle</span><div class="t">Stopping server</div><span class="spin-sm"></span></div>
+        <div class="step pending" data-step="replacing"><span class="dot-mini"></span><span class="material-icons mi">folder_zip</span><div class="t">Replacing files</div><span class="spin-sm"></span></div>
+        <div class="step pending" data-step="unlocking"><span class="dot-mini"></span><span class="material-icons mi">lock_open</span><div class="t">Unlocking</div><span class="spin-sm"></span></div>
+        <div class="step pending" data-step="done"><span class="dot-mini"></span><span class="material-icons mi">check_circle</span><div class="t">Finished</div><span class="spin-sm"></span></div>
+      </div>
+    </div>
+    <div class="ft">
+      <button id="restore-close" class="btn">Close</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -372,6 +439,33 @@ function attachSteppers(){
     })
   })
 }
+let sock=null
+function ensureSocket(){ if(!sock){ sock=io(); } return sock }
+function openRestoreModal(){ const m=document.getElementById('restore-modal'); if(m.parentElement!==document.body){ document.body.appendChild(m) } m.classList.add('show'); resetRestoreSteps(); document.getElementById('restore-close').disabled=true; document.getElementById('restore-sub').textContent='Working…' }
+function closeRestoreModal(){ const m=document.getElementById('restore-modal'); m.classList.remove('show') }
+function resetRestoreSteps(){ document.querySelectorAll('#restore-modal .step').forEach(s=>{s.classList.remove('active','done','err');s.classList.add('pending')}) }
+function setActive(step){
+  const s=document.querySelector('#restore-modal .step[data-step="'+step+'"]');
+  if(!s) return;
+  s.classList.remove('pending','done','err');
+  s.classList.add('active');
+}
+function setDone(step){
+  const s=document.querySelector('#restore-modal .step[data-step="'+step+'"]');
+  if(!s) return;
+  s.classList.remove('pending','active','err');
+  s.classList.add('done');
+  const d=s.querySelector('.dot-mini');
+  if(d){d.classList.remove('err');d.classList.add('ok')}
+}
+function setErr(step){
+  const s=document.querySelector('#restore-modal .step[data-step="'+step+'"]');
+  if(!s) return;
+  s.classList.remove('pending','active','done');
+  s.classList.add('err');
+  const d=s.querySelector('.dot-mini');
+  if(d){d.classList.remove('ok');d.classList.add('err')}
+}
 function el(t,a,c){const n=document.createElement(t);if(a){const d=a.dataset;const r={...a};delete r.dataset;Object.assign(n,r);if(d){for(const k in d){n.setAttribute('data-'+k.replace(/[A-Z]/g,m=>'-'+m.toLowerCase()),d[k])}}}if(c!==undefined)n.innerHTML=c;return n}
 function toast(t,m,type){const w=document.getElementById('toasts');const d=el('div',{className:'toast '+(type||'')});const c=el('div',{className:'t-content'});c.appendChild(el('div',{className:'t-title'},t));c.appendChild(el('div',{className:'t-msg'},m||''));d.appendChild(c);w.appendChild(d);setTimeout(()=>{d.style.animation='toast-out .16s ease forwards';setTimeout(()=>d.remove(),160)},4200)}
 function api(p,opts){const base=location.protocol==='file:'?'http://127.0.0.1:5003':'';return fetch(base+p,opts).then(async r=>{const t=await r.text();let j;try{j=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error((j&&j.error)||t||('HTTP '+r.status));return j||{}})}
@@ -400,7 +494,17 @@ const btnBRefresh=document.getElementById('btn-backup-refresh')
 const btnBCreate=document.getElementById('btn-backup-create')
 const UPTIME_THRESHOLDS={green:3600,yellow:172800}
 ;(()=>{dotUptime.classList.add('breathe','ping')})()
-
+const modalClose=document.getElementById('restore-close')
+modalClose.addEventListener('click',closeRestoreModal)
+ensureSocket().on('restore_progress', payload=>{
+  const step=(payload&&payload.step)||''
+  if(step==='locking'){ setActive('locking') }
+  if(step==='stopping'){ setDone('locking'); setActive('stopping') }
+  if(step==='replacing'){ setDone('stopping'); setActive('replacing') }
+  if(step==='unlocking'){ setDone('replacing'); setActive('unlocking') }
+  if(step==='done'){ setDone('unlocking'); setActive('done'); setDone('done'); document.getElementById('restore-sub').textContent='Completed'; modalClose.disabled=false; toast('Restore complete','Files replaced from backup','ok'); loadBackups(); refreshStatus() }
+  if(step==='error'){ setErr('replacing'); document.getElementById('restore-sub').textContent=String(payload.error||'Error'); modalClose.disabled=false; toast('Error','Restore failed','err') }
+})
 function loadSettings(){
   api('/panel-settings-data').then(s=>{
     Object.keys(elms).forEach(k=>{
@@ -432,6 +536,33 @@ function refreshStatus(){
     updateUptimeDot(i)
   }).catch(()=>{})
 }
+function confirmModal(message){
+  const modal=document.getElementById('confirm-modal')
+  const msg=document.getElementById('confirm-msg')
+  const btnYes=document.getElementById('confirm-yes')
+  const btnCancel=document.getElementById('confirm-cancel')
+  if(modal.parentElement!==document.body){ document.body.appendChild(modal) }
+  msg.textContent=message||'Are you sure?'
+  modal.classList.add('show')
+  return new Promise(resolve=>{
+    function cleanup(){
+      modal.classList.remove('show')
+      btnYes.removeEventListener('click',onYes)
+      btnCancel.removeEventListener('click',onCancel)
+      modal.removeEventListener('click',onBackdrop)
+      document.removeEventListener('keydown',onKey)
+    }
+    function onYes(){ cleanup(); resolve(true) }
+    function onCancel(){ cleanup(); resolve(false) }
+    function onBackdrop(e){ if(e.target===modal){ cleanup(); resolve(false) } }
+    function onKey(e){ if(e.key==='Escape'){ cleanup(); resolve(false) } }
+    btnYes.addEventListener('click',onYes)
+    btnCancel.addEventListener('click',onCancel)
+    modal.addEventListener('click',onBackdrop)
+    document.addEventListener('keydown',onKey)
+  })
+}
+
 function renderBackups(list){
   rows.innerHTML=''
   if(!Array.isArray(list)||!list.length){
@@ -448,11 +579,43 @@ function renderBackups(list){
     r.appendChild(el('div',{className:'name'},'<span class="material-icons mi">folder_zip</span>'+ (b.name+(b.mtime?' • '+b.mtime:''))))
     r.appendChild(el('div',null,fmtSize(b.size_bytes)))
     const acts=el('div',{className:'actions'})
-    const dl=el('button',{className:'btn sm'},'Download')
-    dl.addEventListener('click',()=>{
+
+    const btnDl=el('button',{className:'btn sm icon flat',title:'Download'},'<span class="material-icons mi">download</span>')
+    btnDl.addEventListener('click',()=>{
       const a=document.createElement('a');a.href='/backup-download?name='+encodeURIComponent(b.name);a.download=b.name;document.body.appendChild(a);a.click();a.remove()
     })
-    acts.appendChild(dl);r.appendChild(acts);rows.appendChild(r)
+
+    const btnRestore=el('button',{className:'btn sm icon success',title:'Restore'},'<span class="material-icons mi">settings_backup_restore</span>')
+    btnRestore.addEventListener('click',()=>{
+      confirmModal('Restore "'+b.name+'"? This will stop the server and replace files.')
+        .then(ok=>{
+          if(!ok) return
+          openRestoreModal()
+          setActive('locking')
+          btnRestore.disabled=true
+          return fetch('/backup-restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:b.name})})
+            .then(r=>r.ok?r.json():Promise.reject())
+            .then(j=>{ if(!(j&&j.ok)) throw new Error('Restore failed') })
+            .catch(()=>{ toast('Error','Restore failed to start','err'); btnRestore.disabled=false })
+        })
+    })
+
+    const btnDel=el('button',{className:'btn sm icon danger',title:'Delete'},'<span class="material-icons mi">delete</span>')
+    btnDel.addEventListener('click',()=>{
+      if(!confirm('Delete "'+b.name+'"?')) return
+      btnDel.disabled=true
+      fetch('/backup-delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:b.name})})
+        .then(r=>r.ok?r.json():Promise.reject())
+        .then(j=>{ if(j&&j.ok){ toast('Deleted',b.name,'ok'); loadBackups(); } else { throw new Error('Delete failed') } })
+        .catch(()=>toast('Error','Delete failed','err'))
+        .finally(()=>{btnDel.disabled=false})
+    })
+
+    acts.appendChild(btnDl)
+    acts.appendChild(btnRestore)
+    acts.appendChild(btnDel)
+    r.appendChild(acts)
+    rows.appendChild(r)
   })
 }
 

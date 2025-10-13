@@ -16,6 +16,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import base64, hashlib, hmac, sqlite3
 import shutil
+import zipfile, tempfile
 
 from io import BytesIO
 try:
@@ -405,7 +406,7 @@ def watchdog_loop():
         while True:
             try:
                 s = get_panel_settings()
-                if s.get('auto_restart', True):
+                if s.get('auto_restart', True) and not is_locked():
                     running_flag = read_server_status()
                     alive = is_process_alive()
                     if running_flag and not alive:
@@ -470,6 +471,97 @@ def backup_create():
     if not path:
         return jsonify({'ok': False}), 500
     return jsonify({'ok': True, 'name': os.path.basename(path)})
+
+@app.route('/backup-delete', methods=['POST'])
+def backup_delete():
+    data = request.get_json(force=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name or '/' in name or '\\' in name or not name.endswith('.zip'):
+        return jsonify({'ok': False, 'error': 'invalid name'}), 400
+    bdir = backups_dir()
+    fp = os.path.join(bdir, name)
+    if not os.path.isfile(fp):
+        return jsonify({'ok': False, 'error': 'not found'}), 404
+    try:
+        os.remove(fp)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+def _clear_directory(path):
+    for entry in os.listdir(path):
+        p = os.path.join(path, entry)
+        try:
+            if os.path.isdir(p):
+                shutil.rmtree(p)
+            else:
+                os.remove(p)
+        except Exception:
+            pass
+
+def _copy_tree(src, dst):
+    for entry in os.listdir(src):
+        s = os.path.join(src, entry)
+        d = os.path.join(dst, entry)
+        if os.path.isdir(s):
+            shutil.copytree(s, d)
+        else:
+            shutil.copy2(s, d)
+
+def restore_backup_archive(archive_path):
+    if not os.path.isfile(archive_path):
+        raise FileNotFoundError('archive not found')
+    tmp = tempfile.mkdtemp(prefix='restore-')
+    try:
+        with zipfile.ZipFile(archive_path, 'r') as zf:
+            zf.extractall(tmp)
+        src_root = tmp
+        items = os.listdir(tmp)
+        if len(items) == 1 and os.path.isdir(os.path.join(tmp, items[0])):
+            src_root = os.path.join(tmp, items[0])
+        os.makedirs(server_files_dir, exist_ok=True)
+        _clear_directory(server_files_dir)
+        _copy_tree(src_root, server_files_dir)
+    finally:
+        try:
+            shutil.rmtree(tmp)
+        except Exception:
+            pass
+
+@app.route('/backup-restore', methods=['POST'])
+def backup_restore():
+    data = request.get_json(force=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name or '/' in name or '\\' in name or not name.endswith('.zip'):
+        return jsonify({'ok': False, 'error': 'invalid name'}), 400
+    bdir = backups_dir()
+    fp = os.path.join(bdir, name)
+    if not os.path.isfile(fp):
+        return jsonify({'ok': False, 'error': 'not found'}), 404
+    def do_restore(path):
+        try:
+            socketio.emit('restore_progress', {'step': 'locking'})
+            with panel_restart_lock:
+                set_lock(True)
+                _write_state(phase='restoring', server_running=False)
+                socketio.emit('restore_progress', {'step': 'stopping'})
+                stop_server_blocking(timeout=90)
+                save_server_status(False)
+                socketio.emit('restore_progress', {'step': 'replacing'})
+                restore_backup_archive(path)
+                _write_state(phase='stopped', server_running=False)
+                socketio.emit('restore_progress', {'step': 'unlocking'})
+                set_lock(False)
+            socketio.emit('restore_progress', {'step': 'done'})
+        except Exception as e:
+            try:
+                set_lock(False)
+            except Exception:
+                pass
+            socketio.emit('restore_progress', {'step': 'error', 'error': str(e)})
+    t = threading.Thread(target=do_restore, args=(fp,), daemon=True)
+    t.start()
+    return jsonify({'ok': True})
 
 @app.route('/backup-download')
 def backup_download():
@@ -965,6 +1057,10 @@ def java_major():
 
 def start_server():
     with app.app_context():
+        if is_locked():
+            _append_console("[panel] start: locked")
+            _write_state(phase='locked', server_running=False)
+            return
         global server_process, SERVER_START_TS
         if is_process_alive():
             _append_console("[panel] start: already running")
@@ -1169,6 +1265,22 @@ def accept_eula():
         return "Ein Fehler ist aufgetreten."
 
 STATE_PATH = os.path.join(app.instance_path, 'server_status.json')
+
+LOCK_PATH = os.path.join(app.instance_path, 'restore.lock')
+
+def set_lock(enabled: bool):
+    os.makedirs(app.instance_path, exist_ok=True)
+    if enabled:
+        with open(LOCK_PATH, 'w') as f:
+            f.write('1')
+    else:
+        try:
+            os.remove(LOCK_PATH)
+        except Exception:
+            pass
+
+def is_locked() -> bool:
+    return os.path.exists(LOCK_PATH)
 
 def _read_state():
     if os.path.exists(STATE_PATH):

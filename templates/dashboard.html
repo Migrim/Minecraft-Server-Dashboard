@@ -248,6 +248,79 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded',()=> {
+  function motdToHtml(raw){
+    if(!raw) return ''
+    let s=String(raw)
+    const hexRe=/&#([0-9a-fA-F]{6})/g
+    s=s.replace(/§x(§[0-9a-fA-F]){6}/g, m=>{
+      const hex=m.replace(/§x/g,'').replace(/§/g,'').toLowerCase()
+      return `§#${hex}`
+    })
+    s=s.replace(hexRe,'§#$1')
+    const map={
+      '0':'#000000','1':'#0000aa','2':'#00aa00','3':'#00aaaa','4':'#aa0000','5':'#aa00aa','6':'#ffaa00','7':'#aaaaaa','8':'#555555','9':'#5555ff','a':'#55ff55','b':'#55ffff','c':'#ff5555','d':'#ff55ff','e':'#ffff55','f':'#ffffff'
+    }
+    let out=''
+    let color=null,bold=false,italic=false,under=false,strike=false
+    function open(){
+      let style=''
+      if(color) style+=`color:${color};`
+      let dec=[]
+      if(under) dec.push('underline')
+      if(strike) dec.push('line-through')
+      const fs=(bold?'font-weight:700;':'')+(italic?'font-style:italic;':'')+(dec.length?`text-decoration:${dec.join(' ')};`:'')
+      return `<span style="${style}${fs}">`
+    }
+    let i=0
+    let openTag=open()
+    while(i<s.length){
+      const ch=s[i]
+      if((ch==='§' || ch==='&') && i+1<s.length){
+        const code=s[i+1].toLowerCase()
+        if(code==='#'){
+          const hex=s.slice(i+2,i+8)
+          if(/^[0-9a-fA-F]{6}$/.test(hex)){
+            out+=`</span>`
+            color='#'+hex
+            openTag=open()
+            out+=openTag
+            i+=8
+            continue
+          }
+        }
+        if(map.hasOwnProperty(code)){
+          out+=`</span>`
+          color=map[code]
+          openTag=open()
+          out+=openTag
+          i+=2
+          continue
+        }
+        if(code==='r'){
+          out+=`</span>`
+          color=null;bold=false;italic=false;under=false;strike=false
+          openTag=open()
+          out+=openTag
+          i+=2
+          continue
+        }
+        if(code==='l'){ out+=`</span>`; bold=true; out+=openTag; i+=2; continue }
+        if(code==='o'){ out+=`</span>`; italic=true; out+=openTag; i+=2; continue }
+        if(code==='n'){ out+=`</span>`; under=true; out+=openTag; i+=2; continue }
+        if(code==='m'){ out+=`</span>`; strike=true; out+=openTag; i+=2; continue }
+        if(code==='k'){ i+=2; continue }
+      }
+      if(ch==='<'||ch==='>'||ch==='&'){
+        const esc={'<':'&lt;','>':'&gt;','&':'&amp;'}
+        out+=esc[ch]
+      }else{
+        out+=ch
+      }
+      i++
+    }
+    out+=`</span>`
+    return out
+  }
   function humanBytes(n){
     if(typeof n!=='number'||!isFinite(n)) return '—'
     const u=['B','KB','MB','GB','TB','PB']
@@ -412,8 +485,8 @@ document.addEventListener('DOMContentLoaded',()=> {
       const s1=chip.querySelector('#info-motd')
       const s2=chip.querySelector('.motd-dup') || chip.querySelector('.motd-item.motd-dup')
       if(!track||!inner||!s1||!s2) return
-      const text=(s1.textContent||'').trim()
       const view=Math.round(track.clientWidth)
+      const text = s1.innerHTML
       const sameText=(text===motdState.text)
       const widthUnchanged=(Math.abs(view - motdState.width) < 4)
       if(sameText && widthUnchanged) return
@@ -422,14 +495,14 @@ document.addEventListener('DOMContentLoaded',()=> {
         const pxPerSec=35
         const dur=Math.max(12, content/pxPerSec)
         chip.style.setProperty('--motd-dur', dur+'s')
-        if(s2.textContent!==text) s2.textContent=text
+        s2.innerHTML=s1.innerHTML
         chip.classList.add('marquee')
       }else{
         chip.classList.remove('marquee')
-        s2.textContent=''
+        s2.innerHTML=''
         inner.style.transform='translateX(0)'
       }
-      motdState={text, width:view}
+      motdState={text: s1.innerHTML, width:view}
     }
   }
 
@@ -703,7 +776,8 @@ document.addEventListener('DOMContentLoaded',()=> {
         set(els.public, info.public_ip || '—')
         set(els.local, info.local_ip || '—')
         set(els.port, info.port || '—')
-        set(els.motd, info.motd || '—')
+        const motdRaw = info.motd || '—'
+        els.motd.innerHTML = motdToHtml(motdRaw)
         setupMotdMarquee()
         set(els.online, info.online_mode === true ? 'true' : (info.online_mode === false ? 'false' : '—'))
       })

@@ -17,7 +17,23 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;word-
 .meta{display:grid;grid-template-columns:minmax(140px,1fr) minmax(280px,2fr);gap:10px;padding:0 28px 18px}
 .meta .chip{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px dashed var(--border);border-radius:12px;font-size:13px;color:#d1d5db;background:#0c0c10;min-width:0}
 .meta .chip b{color:#fff;font-weight:600;white-space:nowrap}
-.meta .chip span{overflow:hidden;text-overflow:ellipsis}
+.meta .chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:relative;}
+.meta .chip span::after{
+  content:attr(title);
+  position:absolute;
+  bottom:calc(100% + 4px);
+  left:0;
+  background:#111114;
+  color:#fff;
+  padding:4px 8px;
+  border-radius:6px;
+  font-size:12px;
+  opacity:0;
+  white-space:nowrap;
+  pointer-events:none;
+  transition:opacity .12s ease;
+}
+.meta .chip span:hover::after{opacity:1}
 @media (max-width:640px){.meta{grid-template-columns:1fr}}
 .drop{margin:0 28px 22px;border:1.5px dashed #34343d;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0));min-height:220px;display:grid;place-items:center;transition:transform .18s ease,border-color .18s ease,background .18s ease}
 .drop.drag{border-color:var(--accent);background:linear-gradient(180deg,rgba(79,70,229,.08),rgba(255,255,255,0));transform:scale(1.01)}
@@ -26,10 +42,10 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;word-
 .drop h2{margin:0 0 6px;font-size:18px}
 .hint{font-size:13px}
 .actions{margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
-.btn:hover{background:#191a20}
+.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .06s ease}
+.btn:disabled{opacity:.5;cursor:not-allowed;filter:grayscale(0.6)}
 .btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
-.btn.primary:hover{filter:brightness(1.05)}
+.btn:active{transform:scale(.98)}
 .btn.ghost{background:transparent}
 .fileline{margin-top:10px;font-size:13px;color:#cbd5e1;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
 .badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
@@ -39,7 +55,6 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;word-
 .progress{height:10px;width:100%;background:#131318;border:1px solid var(--border);border-radius:999px;overflow:hidden;margin-top:14px}
 .progress>span{display:block;height:100%;width:0%;background:var(--accent);transition:width .18s ease;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 
-.status{margin-top:10px;font-size:13px;text-align:center;color:var(--muted);min-height:18px}
 .note{padding:0 28px 0 28px;color:#cbd5e1;font-size:13px}
 .footer{padding:18px 28px 24px;display:flex;gap:10px;justify-content:flex-end}
 .toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
@@ -53,18 +68,21 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;word-
 .toast .t-btn{border:1px solid var(--border);background:#151518;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer}
 @keyframes toast-in{to{transform:translateY(0);opacity:1}}
 @keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn.loading{position:relative;color:transparent}
+.btn.loading:after{content:"";position:absolute;inset:0;margin:auto;width:16px;height:16px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
 </style>
 </head>
 <body>
 <div class="card">
   <div class="header">
-    <h1>Upload Minecraft Server</h1>
+    <h1>Upload Minecraft Server Jar File</h1>
     <button class="btn ghost" id="checkBtn">Check Status</button>
   </div>
 
   <div class="meta">
     <div class="chip"><b>Expected:</b> <span>{{ expected }}</span></div>
-    <div class="chip"><b>Target:</b> <span>{{ server_dir }}</span></div>
+    <div class="chip"><b>Target:</b> <span title="{{ server_dir }}">{{ server_dir }}</span></div>
   </div>
 
   <div id="drop" class="drop" tabindex="0" aria-label="Upload area">
@@ -79,7 +97,6 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;word-
       <div class="fileline" id="fileline"></div>
       <input id="file" type="file" accept=".jar" class="hidden">
       <div class="progress hidden" id="bar"><span></span></div>
-      <div class="status" id="status"></div>
     </div>
   </div>
 
@@ -96,16 +113,19 @@ const chooseBtn=document.getElementById('choose')
 const uploadBtn=document.getElementById('upload')
 const bar=document.getElementById('bar')
 const barFill=bar.querySelector('span')
-const statusEl=document.getElementById('status')
 const fileline=document.getElementById('fileline')
 const checkBtn=document.getElementById('checkBtn')
 const toasts=document.getElementById('toasts')
 let file=null
 
-function setStatus(t){statusEl.textContent=t||''}
 function enableUpload(b){uploadBtn.classList.toggle('hidden',!b)}
-function setFileLine(f){fileline.innerHTML=f?('<span class="badge"><b>File</b>'+f.name+'</span>'+'<span class="badge"><b>Size</b>'+Math.ceil(f.size/1024)+' KB</span>'):''}
-function toast(title,msg,type,actions){
+function setFileLine(f){
+  if(!f){fileline.innerHTML='';return}
+  const sizeKB=f.size/1024
+  const sizeText=sizeKB>=1024? (sizeKB/1024).toFixed(1)+' MB' : Math.ceil(sizeKB)+' KB'
+  fileline.innerHTML='<span class="badge"><b>File</b>'+f.name+'</span>'+'<span class="badge"><b>Size</b>'+sizeText+'</span>'
+}
+function toast(title,msg,type,actions,durationMs){
   const t=document.createElement('div')
   t.className='toast '+(type||'')
   t.innerHTML='<div class="t-content"><div class="t-title">'+title+'</div><div class="t-msg">'+(msg||'')+'</div></div>'
@@ -114,13 +134,31 @@ function toast(title,msg,type,actions){
   ;(actions||[]).forEach(a=>{const b=document.createElement('button');b.className='t-btn';b.textContent=a.label;b.onclick=()=>{a.onClick&&a.onClick();close()};act.appendChild(b)})
   t.appendChild(act)
   toasts.appendChild(t)
-  function close(){t.style.animation='toast-out .16s ease forwards';setTimeout(()=>t.remove(),160)}
-  setTimeout(close,4500)
+  const tMsg=t.querySelector('.t-msg')
+  const dur=typeof durationMs==='number'&&durationMs>0?durationMs:4500
+  let interval=null
+  if(dur&&dur>0&&tMsg){
+    let sec=Math.ceil(dur/1000)
+    if(durationMs){ tMsg.textContent=(msg&&msg.length?msg.replace(/\d+\s*seconds?/,sec+' seconds'):'')||('Closing in '+sec+' seconds') }
+    interval=setInterval(()=>{sec--; if(sec>=0&&tMsg){ tMsg.textContent=(msg&&msg.length?msg.replace(/\d+\s*seconds?/,sec+' seconds'):'')||('Closing in '+sec+' seconds') }},1000)
+  }
+  function close(){ t.style.animation='toast-out .16s ease forwards'; if(interval){clearInterval(interval)} setTimeout(()=>t.remove(),160) }
+  setTimeout(close,dur)
   return {close,el:t}
 }
 
-chooseBtn.onclick=()=>fileInput.click()
-fileInput.onchange=e=>{file=e.target.files[0]||null;setStatus(file?file.name:'');setFileLine(file);enableUpload(!!file)}
+function clearChooseLoading(){ chooseBtn.classList.remove('loading') }
+function setChooseLoading(b){
+  if(b){
+    chooseBtn.classList.add('loading')
+    setTimeout(()=>window.addEventListener('focus',clearChooseLoading,{once:true}),0)
+  }else{
+    clearChooseLoading()
+  }
+}
+
+chooseBtn.onclick=()=>{ setChooseLoading(true); fileInput.click() }
+fileInput.onchange=e=>{clearChooseLoading();file=e.target.files[0]||null;setFileLine(file);enableUpload(!!file)}
 
 ;['dragenter','dragover'].forEach(ev=>{drop.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();drop.classList.add('drag')})})
 ;['dragleave','drop'].forEach(ev=>{drop.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();drop.classList.remove('drag')})})
@@ -128,26 +166,28 @@ drop.addEventListener('drop',e=>{
   const dt=e.dataTransfer
   if(!dt||!dt.files||!dt.files.length)return
   const f=dt.files[0]
-  if(!f.name.toLowerCase().endsWith('.jar')){setStatus('File must be a .jar');toast('Invalid file','Please select a .jar file','err');return}
-  file=f;setStatus(file.name);setFileLine(file);enableUpload(true)
+  if(!f.name.toLowerCase().endsWith('.jar')){toast('Invalid file','Please select a .jar file','err');return}
+  file=f;setFileLine(file);enableUpload(true)
 })
 
 uploadBtn.onclick=()=>{
-  if(!file){setStatus('Choose a .jar first');toast('No file','Choose a .jar first','err');return}
-  if(!file.name.toLowerCase().endsWith('.jar')){setStatus('File must be a .jar');toast('Invalid file','Please select a .jar file','err');return}
+  if(!file){toast('No file','Choose a .jar first','err');return}
+  if(!file.name.toLowerCase().endsWith('.jar')){toast('Invalid file','Please select a .jar file','err');return}
   const fd=new FormData();fd.append('file',file)
   const xhr=new XMLHttpRequest();xhr.open('POST','/upload-jar')
-  xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round((e.loaded/e.total)*100);bar.classList.remove('hidden');barFill.style.width=p+'%';setStatus('Uploading '+p+'%')}}
+  xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round((e.loaded/e.total)*100);bar.classList.remove('hidden');barFill.style.width=p+'%'}}
   xhr.onload=()=>{let ok=false,err='';try{const r=JSON.parse(xhr.responseText);ok=!!r.ok;err=r.error||''}catch(_){err='Unexpected response'}
     if(ok){
-      setStatus('Upload complete')
-      const t=toast('Upload complete','Redirecting in 7 seconds','ok',[{label:'Open Dashboard',onClick:()=>location.href='/'},{label:'Check Status',onClick:()=>window.open('/jar-status','_blank')}])
+      uploadBtn.disabled = true
+      chooseBtn.disabled = true
+      const t=toast('Upload complete','Redirecting in 7 seconds','ok',[{label:'Open Dashboard',onClick:()=>location.href='/'},{label:'Check Status',onClick:()=>window.open('/jar-status','_blank')}],7000)
       setTimeout(()=>{window.location.href='/'},7000)
     }else{
-      setStatus(err||'Upload failed')
       toast('Upload failed',err||'Please try again','err',[{label:'Retry',onClick:()=>uploadBtn.click()}])
+      uploadBtn.disabled = false
+      chooseBtn.disabled = false
     }}
-  xhr.onerror=()=>{setStatus('Network error');toast('Network error','Please check your connection','err')}
+  xhr.onerror=()=>{toast('Network error','Please check your connection','err')}
   xhr.send(fd)
 }
 

@@ -69,6 +69,12 @@ body{margin:0;background:#0a0a0a;color:var(--text);font-family:Roboto,system-ui,
       <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint=='dashboard' %}active{% endif %}">Dashboard</a>
       <a href="{{ url_for('files') }}" class="{% if request.endpoint=='files' %}active{% endif %}">Files</a>
       <a href="{{ url_for('settings') }}" class="{% if request.endpoint=='settings' %}active{% endif %}">Server Settings</a>
+      {% if has_mods %}
+        <a href="{{ url_for('mods_page') }}" class="{% if request.endpoint=='mods_page' %}active{% endif %}">Mods</a>
+      {% endif %}
+      {% if has_plugins %}
+        <a href="{{ url_for('plugins_page') }}" class="{% if request.endpoint=='plugins_page' %}active{% endif %}">Plugins</a>
+      {% endif %}
       <a href="{{ url_for('panel_settings') }}" class="{% if request.endpoint=='panel_settings' %}active{% endif %}">Panel Settings</a>
       <a href="{{ url_for('logout') }}" class="{% if request.endpoint=='logout' %}active{% endif %}">Logout</a>
     </nav>

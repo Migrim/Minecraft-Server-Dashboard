@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, send_file, session, g, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, send_file, session, g, flash, abort
 from flask_socketio import SocketIO
 from threading import Thread
 import subprocess
@@ -172,6 +172,16 @@ def reset_admin_if_env():
     if os.environ.get('RESET_ADMIN') == '1':
         set_user_password('admin', '1234', must_change=True)
 
+def _feature_folder_exists(kind: str) -> bool:
+    return os.path.isdir(os.path.join(server_files_dir, kind))
+
+@app.context_processor
+def inject_feature_flags():
+    return {
+        'has_plugins': _feature_folder_exists('plugins'),
+        'has_mods': _feature_folder_exists('mods'),
+    }
+
 @app.before_request
 def ensure_jar_present():
     ep = request.endpoint or ''
@@ -239,6 +249,23 @@ def settings():
 @app.route('/panel-settings')
 def panel_settings():
     return render_template('panel-settings.html')
+
+
+# ---- Added simple mods/plugins page routes ----#
+
+def _require_feature_folder(kind: str):
+    if not _feature_folder_exists(kind):
+        abort(404)
+
+@app.route('/mods')
+def mods_page():
+    _require_feature_folder('mods')
+    return render_template('mods.html')
+
+@app.route('/plugins')
+def plugins_page():
+    _require_feature_folder('plugins')
+    return render_template('plugins.html')
 
 @app.route('/panel-settings-data')
 def panel_settings_data():
@@ -1330,6 +1357,225 @@ def save_server_status(status):
 def read_server_status():
     return _read_state().get('server_running', False)
 
+
+
+# ---- BEGIN mods/plugins management endpoints ----
+
+def _ensure_feature_folder(kind: str) -> str:
+    if kind not in {"plugins", "mods"}:
+        raise ValueError("invalid kind")
+    p = os.path.join(server_files_dir, kind)
+    os.makedirs(p, exist_ok=True)
+    return p
+
+def _is_valid_package_name(name: str) -> bool:
+    if not name or "/" in name or "\\" in name or name in {".", ".."}:
+        return False
+    lower = name.lower()
+    return lower.endswith(".jar") or lower.endswith(".jar.disabled")
+
+def _list_packages(kind: str):
+    folder = _ensure_feature_folder(kind)
+    items = []
+    try:
+        for n in sorted(os.listdir(folder), key=lambda x: x.lower()):
+            if not _is_valid_package_name(n):
+                continue
+            fp = os.path.join(folder, n)
+            if not os.path.isfile(fp):
+                continue
+            st = os.stat(fp)
+            enabled = not n.lower().endswith('.disabled')
+            base = n[:-9] if n.lower().endswith('.disabled') else n
+            items.append({
+                'name': base,
+                'filename': n,
+                'enabled': enabled,
+                'size_bytes': st.st_size,
+                'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds')
+            })
+    except Exception:
+        pass
+    return items
+
+def _resolve_package_path(kind: str, name: str):
+    folder = _ensure_feature_folder(kind)
+    name = os.path.basename(name or "")
+    cand_enabled = os.path.join(folder, name if name.lower().endswith('.jar') else name + ('' if name.lower().endswith('.jar') else ''))
+    if not cand_enabled.lower().endswith('.jar') and not cand_enabled.lower().endswith('.jar.disabled'):
+        cand_enabled = os.path.join(folder, name + '.jar')
+    cand_disabled = cand_enabled + '.disabled' if not cand_enabled.lower().endswith('.disabled') else cand_enabled
+    if os.path.isfile(cand_enabled):
+        return cand_enabled
+    if os.path.isfile(cand_disabled):
+        return cand_disabled
+    return None
+
+def _toggle_package(kind: str, name: str, enable: bool):
+    p = _resolve_package_path(kind, name)
+    if not p:
+        return False, 'not found'
+    is_disabled = p.lower().endswith('.disabled')
+    if enable and is_disabled:
+        dst = p[:-9]
+        if os.path.exists(dst):
+            return False, 'target exists'
+        os.replace(p, dst)
+        return True, None
+    if not enable and not is_disabled:
+        dst = p + '.disabled'
+        if os.path.exists(dst):
+            return False, 'target exists'
+        os.replace(p, dst)
+        return True, None
+    return True, None
+
+def _delete_package(kind: str, name: str):
+    p = _resolve_package_path(kind, name)
+    if not p:
+        return False, 'not found'
+    try:
+        os.remove(p)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+def _rename_package(kind: str, old_name: str, new_name: str):
+    src = _resolve_package_path(kind, old_name)
+    if not src:
+        return False, 'not found'
+    if not new_name or '/' in new_name or '\\' in new_name or new_name in {'.','..'}:
+        return False, 'invalid name'
+    keep_disabled = src.lower().endswith('.disabled')
+    base = new_name if new_name.lower().endswith('.jar') else (new_name + '.jar')
+    if keep_disabled:
+        base += '.disabled'
+    dst = os.path.join(_ensure_feature_folder(kind), os.path.basename(base))
+    if os.path.exists(dst):
+        return False, 'target exists'
+    try:
+        os.replace(src, dst)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+@app.route('/plugins/list')
+def plugins_list():
+    return jsonify({'items': _list_packages('plugins')})
+
+@app.route('/plugins/upload', methods=['POST'])
+def plugins_upload():
+    folder = _ensure_feature_folder('plugins')
+    files = request.files.getlist('file')
+    if not files:
+        return jsonify({'ok': False, 'error': 'no files'}), 400
+    saved = 0
+    out = []
+    for f in files:
+        name = secure_filename(f.filename or '')
+        if not name or not name.lower().endswith('.jar'):
+            continue
+        dest = os.path.join(folder, name)
+        base, ext = os.path.splitext(dest)
+        i = 1
+        while os.path.exists(dest):
+            dest = f"{base} ({i}){ext}"
+            i += 1
+        f.save(dest)
+        saved += 1
+        out.append(os.path.basename(dest))
+    if not saved:
+        return jsonify({'ok': False, 'error': 'no valid files'}), 400
+    return jsonify({'ok': True, 'saved': saved, 'files': out})
+
+@app.route('/plugins/toggle', methods=['POST'])
+def plugins_toggle():
+    data = request.get_json(force=True) or {}
+    name = (data.get('name') or '').strip()
+    enable = bool(data.get('enable', True))
+    ok, err = _toggle_package('plugins', name, enable)
+    if not ok:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True})
+
+@app.route('/plugins/delete', methods=['POST'])
+def plugins_delete():
+    data = request.get_json(force=True) or {}
+    name = (data.get('name') or '').strip()
+    ok, err = _delete_package('plugins', name)
+    if not ok:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True})
+
+@app.route('/plugins/rename', methods=['POST'])
+def plugins_rename():
+    data = request.get_json(force=True) or {}
+    old = (data.get('old_name') or '').strip()
+    new = (data.get('new_name') or '').strip()
+    ok, err = _rename_package('plugins', old, new)
+    if not ok:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True})
+
+@app.route('/mods/list')
+def mods_list():
+    return jsonify({'items': _list_packages('mods')})
+
+@app.route('/mods/upload', methods=['POST'])
+def mods_upload():
+    folder = _ensure_feature_folder('mods')
+    files = request.files.getlist('file')
+    if not files:
+        return jsonify({'ok': False, 'error': 'no files'}), 400
+    saved = 0
+    out = []
+    for f in files:
+        name = secure_filename(f.filename or '')
+        if not name or not name.lower().endswith('.jar'):
+            continue
+        dest = os.path.join(folder, name)
+        base, ext = os.path.splitext(dest)
+        i = 1
+        while os.path.exists(dest):
+            dest = f"{base} ({i}){ext}"
+            i += 1
+        f.save(dest)
+        saved += 1
+        out.append(os.path.basename(dest))
+    if not saved:
+        return jsonify({'ok': False, 'error': 'no valid files'}), 400
+    return jsonify({'ok': True, 'saved': saved, 'files': out})
+
+@app.route('/mods/toggle', methods=['POST'])
+def mods_toggle():
+    data = request.get_json(force=True) or {}
+    name = (data.get('name') or '').strip()
+    enable = bool(data.get('enable', True))
+    ok, err = _toggle_package('mods', name, enable)
+    if not ok:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True})
+
+@app.route('/mods/delete', methods=['POST'])
+def mods_delete():
+    data = request.get_json(force=True) or {}
+    name = (data.get('name') or '').strip()
+    ok, err = _delete_package('mods', name)
+    if not ok:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True})
+
+@app.route('/mods/rename', methods=['POST'])
+def mods_rename():
+    data = request.get_json(force=True) or {}
+    old = (data.get('old_name') or '').strip()
+    new = (data.get('new_name') or '').strip()
+    ok, err = _rename_package('mods', old, new)
+    if not ok:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True})
+
+# ---- END mods/plugins management endpoints ----
 
 # ---- BEGIN system metrics endpoints ----
 

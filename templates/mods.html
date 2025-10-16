@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Mods • Minecraft Server{% endblock %}
+{% block head_extra %}
+<style>
+.page{width:min(1100px,96vw);margin:0 auto;display:grid;gap:16px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.h-title{font-size:18px;font-weight:700}
+.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}
+.uploader{display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#121217;color:#fff;text-decoration:none;font-size:13px}
+.btn:hover{background:#16161c;border-color:#2a2a33}
+.btn.primary{background:linear-gradient(180deg,#4f46e5,#4338ca);border-color:#3b35b6}
+.btn.icon{padding:6px 8px}
+.btn[disabled]{opacity:.6;cursor:not-allowed}
+.spin{display:inline-block;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.table{width:100%;border-collapse:separate;border-spacing:0}
+.table th,.table td{padding:10px;border-bottom:1px solid var(--border);font-size:13px}
+.table th{color:#cbd5e1;text-align:left;font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:#0f0f12;font-size:12px;color:#cbd5e1}
+.switch{position:relative;display:inline-block;width:44px;height:24px}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;inset:0;background:#27272a;border:1px solid #3a3a40;border-radius:999px;transition:.18s}
+.slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:50%;transform:translateY(-50%);background:#cbd5e1;border-radius:50%;transition:.18s}
+.switch input:checked + .slider{background:#1f2c88;border-color:#3340b3}
+.switch input:checked + .slider:before{transform:translate(20px,-50%)}
+.row-actions{display:flex;align-items:center;gap:8px}
+input.rename{width:100%;background:#0f0f12;border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:#fff}
+.empty{padding:24px;text-align:center;color:#a1a1aa}
+.u-left{display:flex;gap:8px;align-items:center}
+.u-desc{margin-left:auto;color:#a1a1aa;font-size:12px;opacity:.95}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+  <div class="header">
+    <div class="h-title">Mods</div>
+    <div class="actions">
+      <span id="summary" class="badge"><span class="material-icons" style="font-size:16px">extension</span><span id="countLabel">0 items</span></span>
+    </div>
+  </div>
+  <div class="card">
+    <div id="uploader" class="uploader">
+      <div class="u-left">
+        <button id="pickBtn" class="btn primary" type="button"><span class="material-icons" style="font-size:18px">file_upload</span>Upload .jar</button>
+        <div id="uploadInfo" class="badge" style="display:none"></div>
+      </div>
+      <div id="uDesc" class="u-desc">Upload mod .jar files</div>
+    </div>
+  </div>
+  <div class="card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:38%">Name</th>
+          <th style="width:12%">State</th>
+          <th style="width:16%">Size</th>
+          <th style="width:20%">Modified</th>
+          <th style="width:14%">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" class="empty" style="display:none">No mods found</div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const KIND='mods'
+const rows=document.getElementById('rows')
+const emptyEl=document.getElementById('empty')
+const countLabel=document.getElementById('countLabel')
+const pickBtn=document.getElementById('pickBtn')
+const uploadInfo=document.getElementById('uploadInfo')
+const hiddenInput=document.createElement('input')
+hiddenInput.type='file'
+hiddenInput.accept='.jar'
+hiddenInput.multiple=true
+hiddenInput.style.display='none'
+document.body.appendChild(hiddenInput)
+function fmtBytes(b){if(!b&&b!==0)return'';const u=['B','KB','MB','GB'];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i?n.toFixed(2):n)+' '+u[i]}
+function fmtDate(s){try{return new Date(s).toLocaleString()}catch{return s||''}}
+function setUploadInfo(msg,show=true){uploadInfo.textContent=msg;uploadInfo.style.display=show?'inline-flex':'none'}
+function setBusy(btn,icon,text){btn.disabled=true;btn.innerHTML='<span class="material-icons spin" style="font-size:18px">'+icon+'</span>'+text}
+function setReady(btn){btn.disabled=false;btn.innerHTML='<span class="material-icons" style="font-size:18px">file_upload</span>Upload .jar'}
+async function loadList(){
+  const r=await fetch('/'+KIND+'/list')
+  const j=await r.json()
+  const items=(j&&j.items)||[]
+  countLabel.textContent=items.length+' items'
+  rows.innerHTML=''
+  if(!items.length){emptyEl.style.display='block';return}else emptyEl.style.display='none'
+  for(const it of items){
+    const tr=document.createElement('tr')
+    const nameTd=document.createElement('td')
+    const nameWrap=document.createElement('div')
+    nameWrap.style.display='flex'
+    nameWrap.style.alignItems='center'
+    nameWrap.style.gap='8px'
+    const icon=document.createElement('span')
+    icon.className='material-icons'
+    icon.style.fontSize='18px'
+    icon.textContent='extension'
+    const nameSpan=document.createElement('span')
+    nameSpan.textContent=it.name
+    nameSpan.dataset.value=it.name
+    nameTd.appendChild(nameWrap)
+    nameWrap.appendChild(icon)
+    nameWrap.appendChild(nameSpan)
+    const stateTd=document.createElement('td')
+    const sw=document.createElement('label')
+    sw.className='switch'
+    const inp=document.createElement('input')
+    inp.type='checkbox'
+    inp.checked=!!it.enabled
+    const slid=document.createElement('span')
+    slid.className='slider'
+    sw.appendChild(inp);sw.appendChild(slid)
+    stateTd.appendChild(sw)
+    const sizeTd=document.createElement('td');sizeTd.textContent=fmtBytes(it.size_bytes)
+    const mTd=document.createElement('td');mTd.textContent=fmtDate(it.mtime)
+    const actTd=document.createElement('td')
+    const act=document.createElement('div');act.className='row-actions'
+    const renameBtn=document.createElement('button')
+    renameBtn.className='btn icon'
+    renameBtn.type='button'
+    renameBtn.innerHTML='<span class="material-icons" style="font-size:18px">drive_file_rename_outline</span>'
+    const delBtn=document.createElement('button')
+    delBtn.className='btn icon'
+    delBtn.type='button'
+    delBtn.innerHTML='<span class="material-icons" style="font-size:18px">delete</span>'
+    act.appendChild(renameBtn);act.appendChild(delBtn)
+    actTd.appendChild(act)
+    tr.appendChild(nameTd);tr.appendChild(stateTd);tr.appendChild(sizeTd);tr.appendChild(mTd);tr.appendChild(actTd)
+    rows.appendChild(tr)
+    inp.addEventListener('change',async e=>{
+      const enable=e.target.checked
+      const r=await fetch('/'+KIND+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:it.name,enable})})
+      if(!r.ok){e.target.checked=!enable}
+    })
+    delBtn.addEventListener('click',async()=>{
+      const r=await fetch('/'+KIND+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:it.name})})
+      if(r.ok)loadList()
+    })
+    renameBtn.addEventListener('click',()=>{
+      if(nameTd.querySelector('input.rename'))return
+      const input=document.createElement('input')
+      input.className='rename'
+      input.value=it.name
+      nameWrap.replaceChild(input,nameSpan)
+      input.focus()
+      input.addEventListener('keydown',async ev=>{
+        if(ev.key==='Enter'){await doRename(it.name,input.value)}
+        if(ev.key==='Escape'){nameWrap.replaceChild(nameSpan,input)}
+      })
+      input.addEventListener('blur',()=>nameWrap.replaceChild(nameSpan,input))
+      async function doRename(oldName,newName){
+        if(!newName||newName===oldName)return nameWrap.replaceChild(nameSpan,input)
+        const r=await fetch('/'+KIND+'/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({old_name:oldName,new_name:newName})})
+        if(r.ok)loadList();else nameWrap.replaceChild(nameSpan,input)
+      }
+    })
+  }
+}
+pickBtn.addEventListener('click',()=>{
+  setBusy(pickBtn,'autorenew','Selecting...')
+  hiddenInput.value=''
+  hiddenInput.click()
+})
+hiddenInput.addEventListener('change',async()=>{
+  const files=hiddenInput.files
+  if(!files||!files.length){setReady(pickBtn);return}
+  setBusy(pickBtn,'autorenew','Uploading...')
+  const fd=new FormData()
+  for(const f of files)fd.append('file',f)
+  try{
+    const r=await fetch('/'+KIND+'/upload',{method:'POST',body:fd})
+    const j=await r.json().catch(()=>null)
+    if(r.ok&&j&&j.ok){setUploadInfo('Uploaded '+j.saved+' file(s)');loadList()}else setUploadInfo(j&&j.error?j.error:'Upload failed')
+  }catch{setUploadInfo('Network error')}
+  setReady(pickBtn)
+})
+loadList()
+</script>
+{% endblock %}

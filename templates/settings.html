@@ -141,7 +141,6 @@ p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
   .split-col{display:flex;flex-direction:column}
   .split-col .box{flex:1}
 </style>
-</style>
 {% endblock %}
 
 {% block content %}
@@ -389,6 +388,25 @@ const mcColors={
   '0':'#000000','1':'#0000AA','2':'#00AA00','3':'#00AAAA','4':'#AA0000','5':'#AA00AA','6':'#FFAA00','7':'#AAAAAA','8':'#555555','9':'#5555FF','a':'#55FF55','b':'#55FFFF','c':'#FF5555','d':'#FF55FF','e':'#FFFF55','f':'#FFFFFF'
 }
 
+function decodeSectionEscapes(s){
+  if(!s) return ''
+  return s.replace(/\\u00A7/gi,'§')
+}
+function toUiMotd(s){
+  if(!s) return ''
+  s = decodeSectionEscapes(s)
+  s = s.replace(/§/g,'&')
+  return s
+}
+function toPropertiesMotd(s){
+  if(!s) return ''
+  let out = String(s)
+  out = out.replace(/§/g,'&')
+  out = out.replace(/&([0-9a-fk-or])/gi,'\\u00A7$1')
+  out = out.replace(/\r?\n/g,'\\n')
+  return out
+}
+
 function buildColorGrid(){
   const grid=document.getElementById('motdColors')
   grid.innerHTML=''
@@ -459,6 +477,8 @@ function exportWysToMotd(){
 }
 function translateMotdToHtml(s){
   if(!s)return ''
+  s = decodeSectionEscapes(s)
+  s = s.replace(/\\n/g,'\n')
   s=s.replace(/§/g,'&')
   let i=0
   let cur={color:'#FFFFFF',b:false,i:false,u:false,s:false,k:false}
@@ -496,19 +516,22 @@ function translateMotdToHtml(s){
     i++
   }
   flush()
+  for(let i=0;i<out.length;i++){
+    out[i]=out[i].replace(/\n/g,'<br>')
+  }
   return out.join('')
 }
 
 function updateMotdPreview(){
   const p=document.querySelector('#motdPreview .mc-line')
-  const t=document.getElementById('motdEditor').value
+  const t=toUiMotd(document.getElementById('motdEditor').value)
   p.innerHTML=translateMotdToHtml(t)
 }
 
 function openMotdEditor(bindTo){
   const m=document.getElementById('motdModal')
   const ed=document.getElementById('motdEditor')
-  ed.value=bindTo.value||''
+  ed.value=toUiMotd(bindTo.value||'')
   m.dataset.bind=bindTo.id
   const wys=document.getElementById('motdWys')
   wys.innerHTML=translateMotdToHtml(ed.value)
@@ -534,7 +557,7 @@ document.getElementById('motdInsert').addEventListener('click',()=>{
   const bind=document.getElementById(document.getElementById('motdModal').dataset.bind)
   let val
   if(useWys()){val=exportWysToMotd()}else{val=document.getElementById('motdEditor').value}
-  if(bind){bind.value=val}
+  if(bind){bind.value=toPropertiesMotd(val)}
   closeMotdEditor()
 })
 

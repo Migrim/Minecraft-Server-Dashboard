@@ -48,6 +48,7 @@ CORS(app, resources={r"/fs-*": {"origins": "*"}})
 HASH_METHOD = os.environ.get('HASH_METHOD', 'pbkdf2:sha256')
 DB_PATH = os.path.join(app.instance_path, 'users.db')
 app.config.setdefault('BOOTSTRAPPED', False)
+playtime_store = {}
 
 PANEL_DEFAULTS = {
     'auto_restart': True,
@@ -376,17 +377,41 @@ def backup_server_folder():
         return None
     out_dir = os.path.join(app.instance_path, 'server-backups')
     os.makedirs(out_dir, exist_ok=True)
-    ts = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
-    base = os.path.join(out_dir, f'Backup {ts}')
-    archive = shutil.make_archive(base, 'zip', src)
+
+    now = datetime.now()
+    weekday = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][now.weekday()]
+    ts_display = now.strftime('%d-%m-%Y at %H:%M:%S')
+    safe_name = f"Backup - {weekday} {ts_display}"
+    base = os.path.join(out_dir, safe_name)
+
+    try:
+        archive = shutil.make_archive(base, 'zip', root_dir=src)
+    except Exception:
+        # Fallback: create zip explicitly to avoid platform quirks
+        archive = base + '.zip'
+        try:
+            with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+                for root, dirs, files in os.walk(src):
+                    for fname in files:
+                        ap = os.path.join(root, fname)
+                        rp = os.path.relpath(ap, src)
+                        zf.write(ap, rp)
+        except Exception:
+            return None
+
     keep = max(1, int(get_panel_settings().get('backup_keep', 5)))
-    files = sorted([os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.endswith('.zip')])
-    if len(files) > keep:
-        for f in files[:len(files)-keep]:
-            try:
-                os.remove(f)
-            except Exception:
-                pass
+    try:
+        all_archives = [os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.lower().endswith('.zip')]
+        all_archives.sort(key=lambda p: os.stat(p).st_mtime)  # oldest first
+        if len(all_archives) > keep:
+            for p in all_archives[:-keep]:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     return archive
 
 def graceful_restart_with_options(do_backup=False):
@@ -446,20 +471,24 @@ def list_backups():
     bdir = backups_dir()
     if not os.path.isdir(bdir):
         return out
-    for name in sorted(os.listdir(bdir)):
-        if not name.endswith('.zip'):
+    items = []
+    for name in os.listdir(bdir):
+        if not name.lower().endswith('.zip'):
             continue
         p = os.path.join(bdir, name)
         try:
             st = os.stat(p)
-            out.append({
-                'name': name,
-                'size_bytes': st.st_size,
-                'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds')
-            })
+            items.append((p, name, st.st_mtime, st.st_size))
         except Exception:
             continue
-    return list(reversed(out))
+    items.sort(key=lambda t: t[2], reverse=True)
+    for p, name, mtime, size in items:
+        out.append({
+            'name': name,
+            'size_bytes': size,
+            'mtime': datetime.fromtimestamp(mtime).isoformat(timespec='seconds')
+        })
+    return out
 
 @app.route('/backups-list')
 def backups_list():

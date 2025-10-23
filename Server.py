@@ -100,6 +100,7 @@ JAVA_CMD = os.environ.get('JAVA_CMD', 'java')
 server_files_dir = os.path.join(app.instance_path, 'server')
 jar_filename = 'server.jar'
 jar_path = os.path.join(server_files_dir, jar_filename)
+run_script_path = os.path.join(server_files_dir, 'run.sh')
 
 os.makedirs(server_files_dir, exist_ok=True)
 
@@ -185,7 +186,7 @@ def inject_feature_flags():
 @app.before_request
 def ensure_jar_present():
     ep = request.endpoint or ''
-    if os.path.isfile(jar_path):
+    if os.path.isfile(jar_path) or os.path.isfile(run_script_path):
         return
     allowed_eps = {
         'install','upload_jar','static','jar_status','server_info',
@@ -705,12 +706,17 @@ def upload_jar():
 
 @app.route('/jar-status')
 def jar_status():
-    exists = os.path.isfile(jar_path)
-    status = "ok" if exists else "no jar file uploaded"
+    has_jar = os.path.isfile(jar_path)
+    has_run = os.path.isfile(run_script_path)
+    exists = has_jar or has_run
+    mode = 'run.sh' if has_run else ('jar' if has_jar else None)
+    status = 'ok' if exists else 'no launcher present'
     return jsonify({
         'folder': server_files_dir,
         'expected_jar': jar_filename,
         'exists': exists,
+        'mode': mode,
+        'run_script': has_run,
         'status': status
     })
 
@@ -1122,8 +1128,48 @@ def start_server():
             _append_console("[panel] start: already running")
             _write_state(phase='running', server_running=True)
             return
-        if not os.path.isfile(jar_path):
+        use_run = os.path.isfile(run_script_path)
+        if not use_run and not os.path.isfile(jar_path):
             _append_console("[panel] start: jar missing")
+            return
+        if use_run:
+            _write_state(phase='starting', server_running=True)
+            save_server_status(True)
+            try:
+                args = ['bash', 'run.sh']
+                server_process = subprocess.Popen(
+                    args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, text=True, cwd=server_files_dir
+                )
+                SERVER_START_TS = time.time()
+                threading.Thread(target=emit_server_output, args=(server_process,), daemon=True).start()
+                _append_console("[panel] start: using run.sh")
+                def _monitor_startup():
+                    try:
+                        props_path = os.path.join(server_files_dir, 'server.properties')
+                        props = read_properties(props_path)
+                        try:
+                            port = int(props.get('server-port', '25565'))
+                        except Exception:
+                            port = 25565
+                        t0 = time.time()
+                        while time.time() - t0 < 120:
+                            if not is_process_alive():
+                                _write_state(phase='crashed', server_running=False)
+                                return
+                            if is_port_open(port=port):
+                                _write_state(phase='running', server_running=True)
+                                return
+                            time.sleep(0.5)
+                        if is_process_alive():
+                            _write_state(phase='running', server_running=True)
+                        else:
+                            _write_state(phase='crashed', server_running=False)
+                    except Exception:
+                        pass
+                threading.Thread(target=_monitor_startup, daemon=True).start()
+            except Exception as e:
+                _append_console(f"Server start error: {e}")
             return
         ver = java_major()
         if ver is None:
@@ -1152,7 +1198,6 @@ def start_server():
             _append_console("[panel] start: process spawned")
             def _monitor_startup():
                 try:
-                    # Determine port from server.properties (fallback 25565)
                     props_path = os.path.join(server_files_dir, 'server.properties')
                     props = read_properties(props_path)
                     try:
@@ -1168,7 +1213,6 @@ def start_server():
                             _write_state(phase='running', server_running=True)
                             return
                         time.sleep(0.5)
-                    # Timeout: if still alive, assume running; otherwise crashed
                     if is_process_alive():
                         _write_state(phase='running', server_running=True)
                     else:

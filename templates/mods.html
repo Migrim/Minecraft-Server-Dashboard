@@ -1,187 +1,463 @@
-{% extends "base.html" %}
-{% block title %}Mods • Minecraft Server{% endblock %}
+{% extends "base_app.html" %}
+
+{% block title %}Minecraft Server · Mods{% endblock %}
+{% block brand_sub %}<span class="brand-sub">Mods</span>{% endblock %}
+
 {% block head_extra %}
 <style>
-.page{width:min(1100px,96vw);margin:0 auto;display:grid;gap:16px}
-.header{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.h-title{font-size:18px;font-weight:700}
-.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}
-.uploader{display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#121217;color:#fff;text-decoration:none;font-size:13px}
-.btn:hover{background:#16161c;border-color:#2a2a33}
-.btn.primary{background:linear-gradient(180deg,#4f46e5,#4338ca);border-color:#3b35b6}
-.btn.icon{padding:6px 8px}
-.btn[disabled]{opacity:.6;cursor:not-allowed}
-.spin{display:inline-block;animation:spin .9s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.table{width:100%;border-collapse:separate;border-spacing:0}
-.table th,.table td{padding:10px;border-bottom:1px solid var(--border);font-size:13px}
-.table th{color:#cbd5e1;text-align:left;font-weight:600}
-.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:#0f0f12;font-size:12px;color:#cbd5e1}
-.switch{position:relative;display:inline-block;width:44px;height:24px}
-.switch input{opacity:0;width:0;height:0}
-.slider{position:absolute;cursor:pointer;inset:0;background:#27272a;border:1px solid #3a3a40;border-radius:999px;transition:.18s}
-.slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:50%;transform:translateY(-50%);background:#cbd5e1;border-radius:50%;transition:.18s}
-.switch input:checked + .slider{background:#1f2c88;border-color:#3340b3}
-.switch input:checked + .slider:before{transform:translate(20px,-50%)}
-.row-actions{display:flex;align-items:center;gap:8px}
-input.rename{width:100%;background:#0f0f12;border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:#fff}
-.empty{padding:24px;text-align:center;color:#a1a1aa}
-.u-left{display:flex;gap:8px;align-items:center}
-.u-desc{margin-left:auto;color:#a1a1aa;font-size:12px;opacity:.95}
+  /* ---------- work ---------- */
+  .work {
+    flex: 1 1 auto; min-height: 0;
+    padding: 28px 40px 32px;
+    display: flex; flex-direction: column;
+    gap: 22px;
+    overflow: hidden;
+  }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px; border-radius: 10px;
+    font: inherit; font-weight: 500; font-size: 13.5px;
+    cursor: pointer; border: 1px solid transparent;
+    transition: transform .05s, background .15s, border-color .15s, color .15s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color: var(--accent-fg-on); box-shadow: 0 1px 0 rgba(255,255,255,.15) inset, 0 1px 2px rgba(60,30,15,.18); }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--surface); color: var(--text-2); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--bg-soft); color: var(--text); }
+  .btn svg { width: 14px; height: 14px; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .toolbar-left { display: flex; align-items: center; gap: 10px; }
+  .search { position: relative; width: 320px; }
+  .search input {
+    width: 100%; padding: 10px 14px 10px 36px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; font: inherit; font-size: 13px; color: var(--text);
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent); }
+  .search input::placeholder { color: var(--text-3); }
+  .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-3); pointer-events: none; }
+  .chip-group { display: flex; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .chip { padding: 6px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--text-2); cursor: pointer; border: 0; background: transparent; font-family: inherit; }
+  .chip:hover { color: var(--text); }
+  .chip.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+  .chip .num { margin-left: 6px; padding: 1px 6px; background: var(--bg-soft); color: var(--text-3); border-radius: 999px; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chip.active .num { background: var(--accent-soft); color: var(--accent); }
+  .toolbar-right { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 12.5px; }
+
+  /* ---------- card + table ---------- */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+  .table-wrap { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .table-scroll { flex: 1 1 auto; overflow-y: auto; }
+  .table-scroll::-webkit-scrollbar { width: 10px; }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+
+  table.mods { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
+  table.mods thead th {
+    position: sticky; top: 0;
+    background: var(--surface-2); color: var(--text-3);
+    text-align: left; font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .08em;
+    padding: 12px 18px; border-bottom: 1px solid var(--border); z-index: 2;
+  }
+  table.mods thead th .sort { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  table.mods thead th .sort svg { width: 11px; height: 11px; opacity: .6; }
+  table.mods tbody tr { transition: background .12s; }
+  table.mods tbody tr:hover { background: var(--bg-soft); }
+  table.mods tbody tr.row-disabled .mod-name,
+  table.mods tbody tr.row-disabled .mod-meta,
+  table.mods tbody tr.row-disabled .mod-icon { opacity: .55; }
+  table.mods tbody td { padding: 11px 18px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text-2); }
+  table.mods tbody tr:last-child td { border-bottom: 0; }
+
+  /* ---------- mod cell ---------- */
+  .mod-cell { display: flex; align-items: center; gap: 12px; }
+  .mod-icon {
+    width: 32px; height: 32px; flex: 0 0 32px;
+    border-radius: 8px; background: var(--accent-soft); color: var(--accent);
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid color-mix(in oklab, var(--accent) 18%, transparent);
+    transition: opacity .15s;
+  }
+  .mod-icon svg { width: 16px; height: 16px; }
+  .mod-name { color: var(--text); font-weight: 500; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; }
+  .mod-meta { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+
+  /* icon colour variants */
+  .ic-cube   { color: #8a6f3e; background: color-mix(in oklab, #8a6f3e 12%, var(--surface)); border-color: color-mix(in oklab, #8a6f3e 18%, transparent); }
+  .ic-box    { color: #4a7f6d; background: color-mix(in oklab, #4a7f6d 12%, var(--surface)); border-color: color-mix(in oklab, #4a7f6d 18%, transparent); }
+  .ic-flame  { color: #c27a3d; background: color-mix(in oklab, #c27a3d 12%, var(--surface)); border-color: color-mix(in oklab, #c27a3d 18%, transparent); }
+  [data-theme="dark"] .ic-cube  { color: #d4b07a; }
+  [data-theme="dark"] .ic-box   { color: #87c8b1; }
+  [data-theme="dark"] .ic-flame { color: #e8a667; }
+
+  /* ---------- toggle ---------- */
+  .toggle { --w:36px; --h:20px; position: relative; display: inline-block; width: var(--w); height: var(--h); cursor: pointer; flex: 0 0 var(--w); }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .track { position: absolute; inset: 0; background: var(--bg-soft); border: 1px solid var(--border-strong); border-radius: 999px; transition: background .15s, border-color .15s; }
+  .toggle .thumb { position: absolute; top: 50%; left: 3px; width: 12px; height: 12px; background: var(--text-4); border-radius: 50%; transform: translateY(-50%); transition: left .18s ease, background .18s ease; }
+  .toggle input:checked + .track { background: var(--accent); border-color: var(--accent); }
+  .toggle input:checked + .track + .thumb { left: 21px; background: #fff; }
+  .state-cell { display: flex; align-items: center; }
+  .state-label { margin-left: 10px; font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; }
+  .state-on  { color: var(--accent); }
+  .state-off { color: var(--text-4); }
+
+  /* ---------- mono + actions ---------- */
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .act { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--text-3); cursor: pointer; }
+  .act:hover { background: var(--surface); border-color: var(--border); color: var(--text); }
+  .act.danger:hover { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 35%, transparent); background: var(--danger-soft); }
+  .act svg { width: 14px; height: 14px; }
+
+  /* ---------- table footer ---------- */
+  .table-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface-2); color: var(--text-3); font-size: 12.5px; }
+  .table-foot .legend { display: flex; align-items: center; gap: 14px; }
+  .legend-dot { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-dot::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--accent); }
+  .legend-dot.off::before { background: var(--text-4); }
+  .legend-dot strong { color: var(--text); font-weight: 600; }
+
+  /* ---------- empty ---------- */
+  .empty-row td { text-align: center; padding: 36px; color: var(--text-3); font-size: 13px; }
+
+  /* ---------- rename input ---------- */
+  input.rename { background: var(--surface-2); border: 1px solid var(--accent); border-radius: 6px; padding: 3px 7px; color: var(--text); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; width: 100%; }
+  input.rename:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 20%, transparent); }
+
+  /* ---------- var compat ---------- */
+  :root { --danger: #b3402c; --danger-soft: #f4dcd4; --ok: #3f8b5c; --ok-soft: #dfeedd; --warn: #b08218; --warn-soft: #f3e7c4; }
+  [data-theme="dark"] { --danger: #e08a6f; --danger-soft: #3a2418; --ok: #7bbf8a; --ok-soft: #1f2e22; }
 </style>
 {% endblock %}
+
 {% block content %}
-<div class="page">
-  <div class="header">
-    <div class="h-title">Mods</div>
-    <div class="actions">
-      <span id="summary" class="badge"><span class="material-icons" style="font-size:16px">extension</span><span id="countLabel">0 items</span></span>
-    </div>
-  </div>
-  <div class="card">
-    <div id="uploader" class="uploader">
-      <div class="u-left">
-        <button id="pickBtn" class="btn primary" type="button"><span class="material-icons" style="font-size:18px">file_upload</span>Upload .jar</button>
-        <div id="uploadInfo" class="badge" style="display:none"></div>
+<div class="work">
+
+  <h1 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.02em">Mods</h1>
+
+  <!-- toolbar -->
+  <section class="toolbar">
+    <div class="toolbar-left">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="searchInput" placeholder="Search mods…" />
       </div>
-      <div id="uDesc" class="u-desc">Upload mod .jar files</div>
+      <div class="chip-group">
+        <button class="chip active" data-filter="all">All <span class="num" id="chipAll">0</span></button>
+        <button class="chip" data-filter="enabled">Enabled <span class="num" id="chipEnabled">0</span></button>
+        <button class="chip" data-filter="disabled">Disabled <span class="num" id="chipDisabled">0</span></button>
+        <button class="chip" data-filter="recent">Recent</button>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <span id="loaderInfo" style="display:none;color:var(--text-3);font-size:12.5px">Loader: <strong style="color:var(--text-2);font-weight:600" id="loaderLabel"></strong></span>
+      <button class="btn btn-secondary" id="refreshBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+      <button class="btn btn-secondary" id="enableAllBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Enable all
+      </button>
+      <button class="btn btn-primary" id="uploadBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload .jar
+      </button>
+    </div>
+  </section>
+
+  <!-- table -->
+  <div class="card table-wrap">
+    <div class="table-scroll">
+      <table class="mods">
+        <thead>
+          <tr>
+            <th style="width:42%"><span class="sort">Name <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></th>
+            <th style="width:14%">State</th>
+            <th style="width:11%">Size</th>
+            <th style="width:18%"><span class="sort">Modified <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></th>
+            <th style="width:15%; text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="modsBody"></tbody>
+      </table>
+    </div>
+    <div class="table-foot">
+      <div class="legend">
+        <span class="legend-dot"><strong id="footEnabled">0</strong> enabled</span>
+        <span class="legend-dot off"><strong id="footDisabled">0</strong> disabled</span>
+      </div>
+      <div id="footShowing">Showing 0 of 0</div>
     </div>
   </div>
-  <div class="card">
-    <table class="table">
-      <thead>
-        <tr>
-          <th style="width:38%">Name</th>
-          <th style="width:12%">State</th>
-          <th style="width:16%">Size</th>
-          <th style="width:20%">Modified</th>
-          <th style="width:14%">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div id="empty" class="empty" style="display:none">No mods found</div>
-  </div>
+
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script>
-const KIND='mods'
-const rows=document.getElementById('rows')
-const emptyEl=document.getElementById('empty')
-const countLabel=document.getElementById('countLabel')
-const pickBtn=document.getElementById('pickBtn')
-const uploadInfo=document.getElementById('uploadInfo')
-const hiddenInput=document.createElement('input')
-hiddenInput.type='file'
-hiddenInput.accept='.jar'
-hiddenInput.multiple=true
-hiddenInput.style.display='none'
-document.body.appendChild(hiddenInput)
-function fmtBytes(b){if(!b&&b!==0)return'';const u=['B','KB','MB','GB'];let i=0,n=b;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i?n.toFixed(2):n)+' '+u[i]}
-function fmtDate(s){try{return new Date(s).toLocaleString()}catch{return s||''}}
-function setUploadInfo(msg,show=true){uploadInfo.textContent=msg;uploadInfo.style.display=show?'inline-flex':'none'}
-function setBusy(btn,icon,text){btn.disabled=true;btn.innerHTML='<span class="material-icons spin" style="font-size:18px">'+icon+'</span>'+text}
-function setReady(btn){btn.disabled=false;btn.innerHTML='<span class="material-icons" style="font-size:18px">file_upload</span>Upload .jar'}
-async function loadList(){
-  const r=await fetch('/'+KIND+'/list')
-  const j=await r.json()
-  const items=(j&&j.items)||[]
-  countLabel.textContent=items.length+' items'
-  rows.innerHTML=''
-  if(!items.length){emptyEl.style.display='block';return}else emptyEl.style.display='none'
-  for(const it of items){
-    const tr=document.createElement('tr')
-    const nameTd=document.createElement('td')
-    const nameWrap=document.createElement('div')
-    nameWrap.style.display='flex'
-    nameWrap.style.alignItems='center'
-    nameWrap.style.gap='8px'
-    const icon=document.createElement('span')
-    icon.className='material-icons'
-    icon.style.fontSize='18px'
-    icon.textContent='extension'
-    const nameSpan=document.createElement('span')
-    nameSpan.textContent=it.name
-    nameSpan.dataset.value=it.name
-    nameTd.appendChild(nameWrap)
-    nameWrap.appendChild(icon)
-    nameWrap.appendChild(nameSpan)
-    const stateTd=document.createElement('td')
-    const sw=document.createElement('label')
-    sw.className='switch'
-    const inp=document.createElement('input')
-    inp.type='checkbox'
-    inp.checked=!!it.enabled
-    const slid=document.createElement('span')
-    slid.className='slider'
-    sw.appendChild(inp);sw.appendChild(slid)
-    stateTd.appendChild(sw)
-    const sizeTd=document.createElement('td');sizeTd.textContent=fmtBytes(it.size_bytes)
-    const mTd=document.createElement('td');mTd.textContent=fmtDate(it.mtime)
-    const actTd=document.createElement('td')
-    const act=document.createElement('div');act.className='row-actions'
-    const renameBtn=document.createElement('button')
-    renameBtn.className='btn icon'
-    renameBtn.type='button'
-    renameBtn.innerHTML='<span class="material-icons" style="font-size:18px">drive_file_rename_outline</span>'
-    const delBtn=document.createElement('button')
-    delBtn.className='btn icon'
-    delBtn.type='button'
-    delBtn.innerHTML='<span class="material-icons" style="font-size:18px">delete</span>'
-    act.appendChild(renameBtn);act.appendChild(delBtn)
-    actTd.appendChild(act)
-    tr.appendChild(nameTd);tr.appendChild(stateTd);tr.appendChild(sizeTd);tr.appendChild(mTd);tr.appendChild(actTd)
-    rows.appendChild(tr)
-    inp.addEventListener('change',async e=>{
-      const enable=e.target.checked
-      const r=await fetch('/'+KIND+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:it.name,enable})})
-      if(!r.ok){e.target.checked=!enable}
-    })
-    delBtn.addEventListener('click',async()=>{
-      const r=await fetch('/'+KIND+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:it.name})})
-      if(r.ok)loadList()
-    })
-    renameBtn.addEventListener('click',()=>{
-      if(nameTd.querySelector('input.rename'))return
-      const input=document.createElement('input')
-      input.className='rename'
-      input.value=it.name
-      nameWrap.replaceChild(input,nameSpan)
-      input.focus()
-      input.addEventListener('keydown',async ev=>{
-        if(ev.key==='Enter'){await doRename(it.name,input.value)}
-        if(ev.key==='Escape'){nameWrap.replaceChild(nameSpan,input)}
-      })
-      input.addEventListener('blur',()=>nameWrap.replaceChild(nameSpan,input))
-      async function doRename(oldName,newName){
-        if(!newName||newName===oldName)return nameWrap.replaceChild(nameSpan,input)
-        const r=await fetch('/'+KIND+'/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({old_name:oldName,new_name:newName})})
-        if(r.ok)loadList();else nameWrap.replaceChild(nameSpan,input)
-      }
-    })
-  }
+const KIND = 'mods';
+const tbody = document.getElementById('modsBody');
+const searchInput = document.getElementById('searchInput');
+
+let allMods = [];
+let activeFilter = 'all';
+
+/* ---------- icon variants ---------- */
+const ICONS = {
+  puzzle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.439 7.85a1 1 0 0 0 .289.878l1.568 1.568c.94.94.94 2.468 0 3.408l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.98.98 0 0 1-.276.837l-1.61 1.61c-.94.94-2.468.94-3.409 0l-1.568-1.568a1 1 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1 1 0 0 0-.289-.877L1.704 14.41a2.41 2.41 0 0 1 0-3.41L3.23 9.477A1 1 0 0 1 4.147 9.17c.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073A1 1 0 0 1 7.778 4.93l1.525-1.525a2.41 2.41 0 0 1 3.408 0l1.568 1.568a1 1 0 0 0 .877.29c.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.015Z"/></svg>`,
+  cube:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
+  box:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m7.5 4.27 9 5.15"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>`,
+  flame:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+};
+const TYPE_ICON  = { Forge: 'flame', NeoForge: 'flame', Fabric: 'box', Quilt: 'box' };
+const TYPE_LABEL = { Forge: 'Forge mod', NeoForge: 'NeoForge mod', Fabric: 'Fabric mod', Quilt: 'Quilt mod' };
+function modIcon(type)  { return TYPE_ICON[type]  || 'cube'; }
+function modLabel(type) { return TYPE_LABEL[type] || ''; }
+
+/* ---------- format helpers ---------- */
+function fmtBytes(b) {
+  if (!b && b !== 0) return '';
+  const u = ['B','KB','MB','GB']; let i = 0, n = b;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i ? n.toFixed(2) : n) + ' ' + u[i];
 }
-pickBtn.addEventListener('click',()=>{
-  setBusy(pickBtn,'autorenew','Selecting...')
-  hiddenInput.value=''
-  hiddenInput.click()
-})
-hiddenInput.addEventListener('change',async()=>{
-  const files=hiddenInput.files
-  if(!files||!files.length){setReady(pickBtn);return}
-  setBusy(pickBtn,'autorenew','Uploading...')
-  const fd=new FormData()
-  for(const f of files)fd.append('file',f)
-  try{
-    const r=await fetch('/'+KIND+'/upload',{method:'POST',body:fd})
-    const j=await r.json().catch(()=>null)
-    if(r.ok&&j&&j.ok){setUploadInfo('Uploaded '+j.saved+' file(s)');loadList()}else setUploadInfo(j&&j.error?j.error:'Upload failed')
-  }catch{setUploadInfo('Network error')}
-  setReady(pickBtn)
-})
-loadList()
+function fmtDate(s) {
+  try {
+    const d = new Date(s);
+    return d.toLocaleDateString('de-DE') + ', ' + d.toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
+  } catch { return s || ''; }
+}
+
+/* ---------- filtering ---------- */
+function getVisible() {
+  const q = searchInput.value.trim().toLowerCase();
+  const now = Date.now();
+  return allMods.filter(it => {
+    if (q && !it.name.toLowerCase().includes(q)) return false;
+    if (activeFilter === 'enabled'  && !it.enabled)  return false;
+    if (activeFilter === 'disabled' && it.enabled)   return false;
+    if (activeFilter === 'recent') {
+      const age = now - new Date(it.mtime).getTime();
+      if (age > 7 * 24 * 3600 * 1000) return false;
+    }
+    return true;
+  });
+}
+
+/* ---------- render ---------- */
+function render() {
+  const visible = getVisible();
+  const enabled  = allMods.filter(m => m.enabled).length;
+  const disabled = allMods.length - enabled;
+
+  document.getElementById('chipAll').textContent      = allMods.length;
+  document.getElementById('chipEnabled').textContent   = enabled;
+  document.getElementById('chipDisabled').textContent  = disabled;
+
+  // footer
+  document.getElementById('footEnabled').textContent  = enabled;
+  document.getElementById('footDisabled').textContent = disabled;
+  document.getElementById('footShowing').textContent  = `Showing ${visible.length} of ${allMods.length}`;
+
+  if (!visible.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">${allMods.length ? 'No mods match the current filter.' : 'No mods found.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = visible.map((it, idx) => {
+    const kind  = modIcon(it.mod_type);
+    const label = modLabel(it.mod_type);
+    const on    = it.enabled;
+    return `
+      <tr class="${on ? '' : 'row-disabled'}" data-name="${escHtml(it.name)}">
+        <td>
+          <div class="mod-cell">
+            <span class="mod-icon ic-${kind}">${ICONS[kind]}</span>
+            <div>
+              <div class="mod-name js-name">${escHtml(it.name)}</div>
+              ${label ? `<div class="mod-meta">${label}</div>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="state-cell">
+            <label class="toggle">
+              <input type="checkbox" ${on ? 'checked' : ''} class="js-toggle" />
+              <span class="track"></span>
+              <span class="thumb"></span>
+            </label>
+            <span class="state-label ${on ? 'state-on' : 'state-off'}">${on ? 'On' : 'Off'}</span>
+          </div>
+        </td>
+        <td><span class="mono">${fmtBytes(it.size_bytes)}</span></td>
+        <td><span class="mono">${fmtDate(it.mtime)}</span></td>
+        <td>
+          <div class="row-actions">
+            <button class="act js-rename" title="Rename">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+            </button>
+            <button class="act danger js-delete" title="Delete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // wire toggle
+  tbody.querySelectorAll('.js-toggle').forEach(inp => {
+    inp.addEventListener('change', async e => {
+      const tr   = e.target.closest('tr');
+      const name = tr.dataset.name;
+      const enable = e.target.checked;
+      const r = await fetch(`/${KIND}/toggle`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, enable})});
+      if (r.ok) {
+        const mod = allMods.find(m => m.name === name);
+        if (mod) mod.enabled = enable;
+        tr.classList.toggle('row-disabled', !enable);
+        const lbl = tr.querySelector('.state-label');
+        lbl.textContent = enable ? 'On' : 'Off';
+        lbl.className = 'state-label ' + (enable ? 'state-on' : 'state-off');
+        const en = allMods.filter(m => m.enabled).length;
+        const dis = allMods.length - en;
+        document.getElementById('chipEnabled').textContent  = en;
+        document.getElementById('chipDisabled').textContent = dis;
+        document.getElementById('footEnabled').textContent  = en;
+        document.getElementById('footDisabled').textContent = dis;
+      } else {
+        e.target.checked = !enable;
+      }
+    });
+  });
+
+  // wire delete
+  tbody.querySelectorAll('.js-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.closest('tr').dataset.name;
+      if (!confirm(`Delete ${name}?`)) return;
+      const r = await fetch(`/${KIND}/delete`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
+      if (r.ok) loadList();
+    });
+  });
+
+  // wire rename
+  tbody.querySelectorAll('.js-rename').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tr   = btn.closest('tr');
+      const nameEl = tr.querySelector('.js-name');
+      if (tr.querySelector('input.rename')) return;
+      const oldName = tr.dataset.name;
+      const inp = document.createElement('input');
+      inp.className = 'rename';
+      inp.value = oldName;
+      nameEl.replaceWith(inp);
+      inp.focus();
+      inp.select();
+      async function doRename(newName) {
+        if (!newName || newName === oldName) { inp.replaceWith(nameEl); return; }
+        const r = await fetch(`/${KIND}/rename`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({old_name: oldName, new_name: newName})});
+        if (r.ok) loadList(); else inp.replaceWith(nameEl);
+      }
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter')  doRename(inp.value.trim());
+        if (e.key === 'Escape') inp.replaceWith(nameEl);
+      });
+      inp.addEventListener('blur', () => inp.replaceWith(nameEl));
+    });
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ---------- load ---------- */
+async function loadList() {
+  const r = await fetch(`/${KIND}/list`);
+  const j = await r.json();
+  allMods = (j && j.items) || [];
+  render();
+}
+
+async function loadLoaderInfo() {
+  try {
+    const r = await fetch('/server-info');
+    const j = await r.json();
+    if (j && j.loader && j.forge_version && j.forge_version !== 'unknown') {
+      document.getElementById('loaderLabel').textContent = `${j.loader} ${j.forge_version}`;
+      document.getElementById('loaderInfo').style.display = '';
+    } else if (j && j.loader) {
+      document.getElementById('loaderLabel').textContent = j.loader;
+      document.getElementById('loaderInfo').style.display = '';
+    }
+  } catch {}
+}
+
+/* ---------- upload ---------- */
+const hiddenInput = document.createElement('input');
+hiddenInput.type = 'file'; hiddenInput.accept = '.jar'; hiddenInput.multiple = true; hiddenInput.style.display = 'none';
+document.body.appendChild(hiddenInput);
+
+const uploadBtn = document.getElementById('uploadBtn');
+uploadBtn.addEventListener('click', () => { hiddenInput.value = ''; hiddenInput.click(); });
+hiddenInput.addEventListener('change', async () => {
+  const files = hiddenInput.files;
+  if (!files || !files.length) return;
+  uploadBtn.disabled = true;
+  uploadBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Uploading…`;
+  const fd = new FormData();
+  for (const f of files) fd.append('file', f);
+  try {
+    const r = await fetch(`/${KIND}/upload`, {method:'POST', body: fd});
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ok) loadList();
+  } catch {}
+  uploadBtn.disabled = false;
+  uploadBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload .jar`;
+});
+
+/* ---------- refresh ---------- */
+document.getElementById('refreshBtn').addEventListener('click', loadList);
+
+/* ---------- enable all ---------- */
+document.getElementById('enableAllBtn').addEventListener('click', async () => {
+  const disabled = allMods.filter(m => !m.enabled);
+  if (!disabled.length) return;
+  await Promise.all(disabled.map(m =>
+    fetch(`/${KIND}/toggle`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: m.name, enable: true})})
+  ));
+  loadList();
+});
+
+/* ---------- chips ---------- */
+document.querySelectorAll('.chip-group .chip').forEach(c => {
+  c.addEventListener('click', () => {
+    document.querySelectorAll('.chip-group .chip').forEach(x => x.classList.remove('active'));
+    c.classList.add('active');
+    activeFilter = c.dataset.filter;
+    render();
+  });
+});
+
+/* ---------- search ---------- */
+searchInput.addEventListener('input', render);
+
+/* ---------- spin keyframe ---------- */
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+document.head.appendChild(style);
+
+loadList();
+loadLoaderInfo();
 </script>
 {% endblock %}

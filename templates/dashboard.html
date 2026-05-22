@@ -1,458 +1,659 @@
-{% extends "base.html" %}
-{% block title %}Minecraft Server Dashboard{% endblock %}
+{% extends "base_app.html" %}
+{% block title %}Minecraft Server · Dashboard{% endblock %}
+
+{% block brand_sub %}<span class="brand-sub" id="brand-server-name">Dashboard</span>{% endblock %}
+
 {% block head_extra %}
 <style>
-html{background:#0a0a0a}
-body{background:radial-gradient(1200px 500px at 50% -20%,#1b1b1f 0%,transparent 60%),radial-gradient(1200px 500px at 50% 120%,#1b1b1f 0%,transparent 60%),linear-gradient(#0a0a0a,#0a0a0a)}
-p{margin:0 0 8px;line-height:1.5;color:var(--muted)}
-.card{width:min(1100px,96vw);background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 22px 60px rgba(0,0,0,.45);overflow:hidden}
-.header{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.header h1{margin:0;font-size:22px;letter-spacing:.2px}
-.header-right{display:flex;align-items:center;gap:10px}
-.badge{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#cbd5e1}
-.badge b{color:#fff}
-.dot{position:relative;width:10px;height:10px;border-radius:999px;background:#444;border:1px solid #2a2a2e}
-.dot.running{background:#22c55e;border-color:#1d3b29;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:dot-pulse 1.6s ease-out infinite}
-.dot.running::after{content:"";position:absolute;inset:-4px;border-radius:999px;border:2px solid rgba(34,197,94,.35);animation:dot-ring 1.6s ease-out infinite}
-.dot.stopped{background:#ef4444;border-color:#3a1f22;box-shadow:none;animation:none}
+  :root { --console-bg:#221b14; --console-fg:#ece2ce; --console-dim:#9b8e74; --console-mute:#7a6f5a; }
+  [data-theme="dark"] { --console-bg:#14100b; --console-fg:#ece2ce; --console-dim:#9b8e74; --console-mute:#6f6450; }
 
-@keyframes dot-pulse{to{box-shadow:0 0 0 9px rgba(34,197,94,0)}}
-@keyframes dot-ring{from{transform:scale(.7);opacity:.9}to{transform:scale(1.3);opacity:0}}
+  /* ---------- work area ---------- */
+  .work {
+    flex:1 1 auto; min-height:0;
+    padding:28px 40px 32px;
+    display:grid;
+    grid-template-rows:auto auto 1fr;
+    grid-template-columns:minmax(0,1fr) 420px;
+    grid-template-areas:"hero rail" "metrics rail" "console rail";
+    gap:22px 24px;
+  }
+  .hero         { grid-area:hero; }
+  .metrics      { grid-area:metrics; }
+  .console-card { grid-area:console; min-height:0; }
+  .rail         { grid-area:rail; min-height:0; display:flex; flex-direction:column; gap:22px; }
 
-@media (prefers-reduced-motion: reduce){
-  .dot.running,.dot.running::after{animation:none;box-shadow:none}
-}
-.btn{appearance:none;border:1px solid var(--border);background:#151518;color:#fff;border-radius:10px;padding:10px 14px;font-weight:500;font-size:14px;cursor:pointer;transition:transform .1s ease,background .2s ease,border-color .2s ease}
-.btn:hover{background:#191a20}
-.btn.primary{border-color:#3b3be0;background:linear-gradient(180deg,#5454ff,#3d3de6)}
-.btn.primary:hover{filter:brightness(1.05)}
-.btn.ghost{background:transparent}
-.toolbar{padding:0 24px 16px;display:flex;gap:10px;flex-wrap:wrap}
-.grid{padding:0 24px 24px;display:grid;grid-template-columns:2fr 1fr;gap:16px}
-@media (max-width:1000px){.grid{grid-template-columns:1fr}}
-.panel{border:1px solid var(--border);border-radius:14px;background:#0e0e11}
-.panel .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600}
-.console-wrap{display:flex;flex-direction:column;height:520px}
-.console-output{flex:1;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.45;overflow:auto;white-space:pre-wrap;word-break:break-word;background:#0b0b0d}
-.console-output .warn{color:#fbbf24}
-.console-output .error{color:#ef4444}
-.console-output .green{color:#22c55e}
-.console-output .purple{color:#a78bfa}
-.console-output .yellow{color:#facc15}
-.console-output .from-panel{color:#c084fc}
-.console-inputbar{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}
-.input{flex:1;border:1px solid var(--border);background:#111114;color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
-.side{display:flex;flex-direction:column;gap:16px}
-.section{border:1px solid var(--border);border-radius:14px;background:#0e0e11}
-.section .title{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600}
-.count-badge{margin-left:8px;font-weight:600;font-size:12px;color:#cbd5e1;background:#0b0b0d;border:1px solid var(--border);border-radius:999px;padding:2px 8px;line-height:1}
-.kit{display:inline-flex;align-items:center;gap:6px;background:#0b0b0d;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12px;color:#cbd5e1}
-.kit b{color:#fff}
-.filebox .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-/* tiny extra space at the very top of the info list */
-.filebox .row:first-child{margin-top:6px}
-/* NEW: give the info area a bit of left padding */
-.filebox{padding-left:14px}
-/* Server Info: compact, inline-wrapping chips with minimal dead space */
-.filebox{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px 10px;
-  padding:10px 14px 12px;
-}
-.filebox .row{display:contents; margin:0}
-.kit{
-  padding:6px 8px;
-  font-size:12px;
-  line-height:1.1;
-  border-radius:8px;
-}
-.kit b{margin-right:6px}
-/* Players list = max 3 rows, scrollable */
-.players{max-height:calc(3*52px);overflow:auto}
-.player{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #141418;min-height:52px}
-.player:last-child{border-bottom:none}
-.player .name{font-size:14px}
-.more-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);background:#151518;color:#fff;border-radius:8px;padding:6px 8px;cursor:pointer}
+  /* ---------- hero ---------- */
+  .hero { display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .hero h1 { margin:0 0 4px; font-size:26px; font-weight:600; letter-spacing:-.02em; }
+  .hero p.lede { margin:0; color:var(--text-3); font-size:13.5px; }
+  .hero p.lede strong { color:var(--text-2); font-weight:600; }
+  .hero-actions { display:flex; gap:10px; align-items:center; }
 
-/* Floating dropdown (outside scroll area) */
-.dropdown-portal{
-  position:fixed;
-  background:#0f0f10;
-  border:1px solid var(--border);
-  border-radius:10px;
-  min-width:180px;
-  box-shadow:0 14px 40px rgba(0,0,0,.45);
-  display:none;
-  z-index:1000;
-  overflow:hidden;
-}
-.dropdown-portal.show{display:block}
-.dropdown-portal .menu-item{
-  display:block;width:100%;text-align:left;background:transparent;color:#fff;
-  border:none;padding:10px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #141418
-}
-.dropdown-portal .menu-item:last-child{border-bottom:none}
+  .status-pill {
+    display:inline-flex; align-items:center; gap:9px;
+    padding:6px 0;
+    background:transparent; color:#2f9e44;
+    border-radius:999px; font-weight:500; font-size:13px;
+    border:0;
+    transition:color .2s;
+  }
+  .status-pill.stopped {
+    background:transparent; color:var(--text-3);
+  }
+  .status-pill.crashed {
+    color:#d9480f;
+  }
+  .status-dot {
+    width:7px; height:7px; border-radius:999px;
+    background:currentColor;
+  }
+  .server-info .status-pill {
+    margin-left:auto;
+    padding:0;
+    font-size:12.5px;
+  }
 
-/* Nice scrollbars */
-.console-output,.players,body{scrollbar-width:thin;scrollbar-color:#2a2a33 #0b0b0d}
-.console-output{user-select:text;-webkit-user-select:text}
-.console-output::-webkit-scrollbar,.players::-webkit-scrollbar{width:10px;height:10px}
-.console-output::-webkit-scrollbar-track,.players::-webkit-scrollbar-track{background:#0b0b0d;border-left:1px solid #141418}
-.console-output::-webkit-scrollbar-thumb,.players::-webkit-scrollbar-thumb{background:#2a2a33;border-radius:10px;border:2px solid #0b0b0d}
-.console-output::-webkit-scrollbar-thumb:hover,.players::-webkit-scrollbar-thumb:hover{background:#3a3a44}
+  /* ---------- buttons ---------- */
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 18px; border-radius:10px;
+    font:inherit; font-weight:500; font-size:13.5px;
+    cursor:pointer; border:1px solid transparent;
+    transition:transform .05s,background .15s,border-color .15s,color .15s;
+    white-space:nowrap;
+  }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary {
+    background:var(--accent); color:var(--accent-fg-on);
+    box-shadow:0 1px 0 rgba(255,255,255,.15) inset,0 1px 2px rgba(60,30,15,.18);
+  }
+  .btn-primary:hover { background:var(--accent-hover); }
+  .btn-secondary { background:var(--surface); color:var(--text-2); border-color:var(--border); }
+  .btn-secondary:hover { background:var(--bg-soft); color:var(--text); border-color:var(--border-strong); }
+  .btn svg { width:14px; height:14px; }
+  .btn.disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
 
-/* EULA fade control */
-#accept-eula{opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .22s ease,transform .22s ease}
-#accept-eula.show{opacity:1;pointer-events:auto;transform:none}
+  /* ---------- metrics ---------- */
+  .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .metric {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:18px 20px 16px;
+    box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:10px;
+  }
+  .metric-head {
+    display:flex; align-items:center; justify-content:space-between;
+    color:var(--text-3); font-size:12px; font-weight:500;
+    letter-spacing:.04em; text-transform:uppercase;
+  }
+  .metric-icon {
+    width:28px; height:28px; border-radius:8px;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:var(--accent-soft); color:var(--accent);
+  }
+  .metric-icon svg { width:14px; height:14px; }
+  .metric-value {
+    font-size:26px; font-weight:600; letter-spacing:-.02em; color:var(--text);
+    display:flex; align-items:baseline; gap:6px; line-height:1.1;
+  }
+  .metric-value small { font-size:12.5px; font-weight:500; color:var(--text-3); }
+  .metric .bar { height:6px; background:var(--bg-soft); border-radius:999px; overflow:hidden; }
+  .metric .bar>span { display:block; height:100%; background:var(--accent); border-radius:inherit; transition:width .3s ease; }
+  .metric-meta { display:flex; justify-content:space-between; color:var(--text-3); font-size:12px; }
 
-.toast-wrap{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
-.toast{min-width:280px;max-width:96vw;background:#111114;border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateY(16px);opacity:0;animation:toast-in .18s ease forwards}
-.toast.ok{border-color:#1f3f28}
-.toast.err{border-color:#3a1f22}
-.toast .t-content{flex:1}
-.toast .t-title{font-weight:600;margin:0 0 2px}
-.toast .t-msg{font-size:13px;color:#cbd5e1}
-.toast .t-actions{display:flex;gap:8px;margin-left:8px}
-.toast .t-btn{border:1px solid var(--border);background:#151518;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer}
-@keyframes toast-in{to{transform:translateY(0);opacity:1}}
-@keyframes toast-out{to{transform:translateY(16px);opacity:0}}
+  /* ---------- cards ---------- */
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); box-shadow:var(--shadow-sm);
+    display:flex; flex-direction:column; overflow:hidden; min-height:0;
+  }
+  .card-head {
+    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px; border-bottom:1px solid var(--border);
+  }
+  .card-head h2 {
+    margin:0; font-size:14px; font-weight:600; letter-spacing:-.005em;
+    display:flex; align-items:center; gap:10px;
+  }
+  .card-head .chip {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:2px 9px; background:var(--bg-soft); border:1px solid var(--border);
+    border-radius:999px; color:var(--text-2); font-size:11.5px; font-weight:500;
+  }
+.card-head .head-actions { display:flex; align-items:center; gap:6px; }
+  .head-btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 10px; background:transparent; border:1px solid var(--border);
+    border-radius:8px; font:inherit; font-size:12.5px; color:var(--text-2); cursor:pointer;
+    transition:background .15s,color .15s;
+  }
+  .head-btn:hover { background:var(--bg-soft); color:var(--text); }
+  .head-btn.disabled { opacity:.5; cursor:not-allowed; pointer-events:none; }
+  .head-btn svg { width:12px; height:12px; }
+  #fullscreen-console .icon-collapse { display:none; }
+  #fullscreen-console.is-fullscreen .icon-expand { display:none; }
+  #fullscreen-console.is-fullscreen .icon-collapse { display:block; }
+  .fs-server-actions { display:none; align-items:center; gap:6px; }
+  .console-card:fullscreen .fs-server-actions { display:flex; }
+  .console-card:-webkit-full-screen .fs-server-actions { display:flex; }
 
-.starting{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:45}
-.starting .box{background:#0f0f10;border:1px solid var(--border);border-radius:14px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:12px}
-.loader{width:28px;height:28px;border:3px solid #2a2a33;border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+  /* ---------- console ---------- */
+  .console-card { display:flex; flex-direction:column; min-height:0; }
+  .console-card:fullscreen {
+    width:100vw; height:100vh; border:0; border-radius:0;
+    background:var(--surface);
+  }
+  .console-card:-webkit-full-screen {
+    width:100vw; height:100vh; border:0; border-radius:0;
+    background:var(--surface);
+  }
+  .console-card:fullscreen .console-wrap {
+    font-size:13px;
+    padding:22px 26px;
+  }
+  .console-card:-webkit-full-screen .console-wrap {
+    font-size:13px;
+    padding:22px 26px;
+  }
+  .console-viewport {
+    flex:1 1 auto; min-height:0; position:relative; display:flex;
+    background:var(--console-bg);
+  }
+  .console-wrap {
+    flex:1 1 auto; background:var(--console-bg); color:var(--console-fg);
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:12.5px; line-height:1.6;
+    padding:18px 22px; overflow-y:auto; min-height:0;
+  }
+  .console-wrap::-webkit-scrollbar { width:10px; }
+  .console-wrap::-webkit-scrollbar-track { background:transparent; }
+  .console-wrap::-webkit-scrollbar-thumb { background:#3a2f24; border-radius:999px; }
+  .log-line { white-space:pre-wrap; word-break:break-word; }
+  .warn  { color:#e89a7c; }
+  .error { color:#e06060; }
+  .green,.ok  { color:var(--console-fg); font-weight:500; }
+  .purple     { color:#c4a8e0; }
+  .yellow     { color:#e0c070; }
+  .from-panel { color:#c4a8d8; }
 
-.btn.disabled {
-  opacity: .5;
-  cursor: not-allowed;
-  filter: none !important;
-  background:#151518 !important;
-  border-color: var(--border) !important;
-}
-.kit.motd-chip{display:flex;align-items:center;gap:8px;flex:0 0 100%;max-width:100%}
-.motd-chip b{color:#fff;flex:0 0 auto}
-.motd-track{flex:1 1 0%;width:0;min-width:0;overflow:hidden;position:relative}
-.motd-inner{display:inline-flex;transform:translateX(0)}
-.motd-item{display:inline-block;white-space:nowrap;padding-right:40px}
-.motd-dup{display:none}
-.motd-chip.marquee .motd-dup{display:inline-block}
-.motd-chip.marquee .motd-inner{will-change:transform;animation:motd-loop var(--motd-dur,14s) linear infinite}
-@keyframes motd-loop{from{transform:translateX(0)} to{transform:translateX(-50%)}}
-</style>
-<style>
-.sysbox{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
-.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-@media (max-width:1000px){.stat-row{grid-template-columns:1fr}}
-.stat{border:1px solid var(--border);border-radius:10px;background:#0b0b0d;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
-.stat-head{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#cbd5e1}
-.stat-head b{color:#fff}
-.meter{height:12px;border-radius:999px;background:#111114;border:1px solid var(--border);overflow:hidden}
-.meter .fill{height:100%;width:0;transition:width .25s ease;background:linear-gradient(180deg,#5454ff,#3d3de6)}
-.stat-foot{font-size:12px;color:#aab1c3}
-.disk-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.disk-item{border:1px solid var(--border);border-radius:10px;background:#0b0b0d;padding:10px 12px}
-.disk-head{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#cbd5e1;margin-bottom:8px}
-.net-row{display:flex;flex-wrap:wrap;gap:8px}
-.section-metrics{grid-column:1/-1}
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #333 #0a0a0a;
-}
+  /* ---------- thinking strip (server boot) ---------- */
+  .thinking {
+    flex:0 0 auto; display:flex; align-items:center; gap:12px;
+    padding:10px 22px 12px;
+    background:var(--console-bg);
+    border-top:1px solid #2e2519;
+    color:var(--console-fg);
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:12.5px; line-height:1.4; overflow:hidden;
+    transition:opacity .35s ease, max-height .45s ease, padding .35s ease, border-color .35s ease;
+    max-height:60px;
+  }
+  [data-theme="dark"] .thinking { border-top-color:#241c12; }
+  .thinking.is-hidden {
+    opacity:0; max-height:0;
+    padding-top:0; padding-bottom:0;
+    border-top-color:transparent;
+    pointer-events:none;
+  }
+  .thinking .spin {
+    display:inline-block; width:12px;
+    color:var(--accent); font-weight:500; text-align:center;
+  }
+  .thinking .verb {
+    font-weight:600; letter-spacing:.01em;
+    background:linear-gradient(90deg,
+      var(--console-dim) 0%, var(--console-dim) 35%,
+      #fff5e6 50%,
+      var(--console-dim) 65%, var(--console-dim) 100%
+    );
+    background-size:220% 100%;
+    -webkit-background-clip:text; background-clip:text;
+    color:transparent;
+    animation:shimmer 2.2s linear infinite;
+  }
+  @keyframes shimmer {
+    0%   { background-position:120% 0; }
+    100% { background-position:-120% 0; }
+  }
+  .thinking .sep { color:#4a3d2c; }
+  [data-theme="dark"] .thinking .sep { color:#3a3022; }
+  .thinking .phase {
+    color:var(--console-dim);
+    transition:opacity .25s ease, transform .25s ease;
+    min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    flex:1 1 auto;
+  }
+  .thinking .phase.swap { opacity:0; transform:translateY(-3px); }
+  .thinking .elapsed {
+    color:var(--console-mute); font-variant-numeric:tabular-nums; flex:0 0 auto;
+  }
+  .thinking .hint { color:var(--console-mute); flex:0 0 auto; }
+  .thinking .hint kbd {
+    font-family:inherit; font-size:11px; padding:1px 6px;
+    border-radius:4px; background:#2d2317; border:1px solid #3a2e1f;
+    color:var(--console-fg);
+  }
+  .thinking.is-done .spin { color:#8fc380; }
+  .thinking.is-done .verb {
+    animation:none; background:none;
+    -webkit-text-fill-color:#8fc380; color:#8fc380;
+  }
+  .thinking.is-done .phase { color:var(--console-fg); }
+  .thinking.is-stopped .spin { color:#e89a7c; }
+  .thinking.is-stopped .verb {
+    animation:none; background:none;
+    -webkit-text-fill-color:#e89a7c; color:#e89a7c;
+  }
+  .thinking.is-stopped .phase { color:var(--console-fg); }
+  .thinking.is-rebooting .hint { display:none; }
 
-/* Chrome, Edge, Safari */
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+  .console-input {
+    flex:0 0 auto; display:flex; gap:10px;
+    padding:14px 20px; border-top:1px solid var(--border);
+    background:var(--surface);
+  }
+  .console-input input {
+    flex:1; padding:11px 14px;
+    background:var(--bg-soft); border:1px solid var(--border);
+    border-radius:10px;
+    font-family:'JetBrains Mono',ui-monospace,monospace; font-size:12.5px; color:var(--text);
+    transition:border-color .15s,background .15s,box-shadow .15s;
+  }
+  .console-input input:focus {
+    outline:none; border-color:var(--accent); background:var(--surface);
+    box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 18%,transparent);
+  }
+  .console-input input::placeholder { color:var(--text-3); }
 
-*::-webkit-scrollbar-track {
-  background: #0a0a0a;
-}
+  /* ---------- rail ---------- */
+  .rail .card { flex:0 0 auto; }
+  .rail .card.server-info { flex:1 1 auto; min-height:0; }
+  .rail .card.server-info .card-body { overflow-y:auto; min-height:0; flex:1 1 auto; }
+  .card-body { padding:6px 20px 14px; flex:1 1 auto; }
 
-*::-webkit-scrollbar-thumb {
-  background-color: #333;
-  border-radius: 8px;
-}
+  .info-row {
+    display:grid; grid-template-columns:110px 1fr;
+    gap:12px; padding:11px 0;
+    border-bottom:1px dashed var(--border);
+    align-items:baseline;
+  }
+  .info-row:last-child { border-bottom:0; }
+  .info-key { font-size:11.5px; color:var(--text-3); font-weight:500; text-transform:uppercase; letter-spacing:.05em; }
+  .info-val { font-size:13px; color:var(--text); font-weight:500; word-break:break-all; }
+  .info-val.mono { font-family:'JetBrains Mono',ui-monospace,monospace; font-size:12px; }
+  .info-val .copy-icon {
+    margin-left:8px; cursor:pointer; color:var(--text-3); opacity:0;
+    transition:opacity .15s,color .15s; font-size:12px;
+  }
+  .info-row:hover .copy-icon { opacity:1; }
+  .info-val .copy-icon:hover { color:var(--accent); }
+  .toggle-true { display:inline-flex; align-items:center; gap:6px; color:var(--accent); }
+  .toggle-true::before { content:""; width:6px; height:6px; border-radius:99px; background:currentColor; }
 
-*::-webkit-scrollbar-thumb:hover {
-  background-color: #444;
-}
+  /* players */
+  .players-empty {
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    padding:18px 0 10px; color:var(--text-3); text-align:center;
+  }
+  .players-empty .ico {
+    width:44px; height:44px; border-radius:12px;
+    background:var(--bg-soft); border:1px dashed var(--border-strong);
+    display:inline-flex; align-items:center; justify-content:center; color:var(--text-3);
+  }
+  .players-empty .ico svg { width:20px; height:20px; }
+  .players-empty span { font-size:13.5px; color:var(--text-2); font-weight:500; }
+  .players-empty small { font-size:12px; color:var(--text-3); }
+
+  /* player rows */
+  .player {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 20px; border-bottom:1px dashed var(--border); min-height:46px;
+  }
+  .player:last-child { border-bottom:0; }
+  .player .pname { font-size:13.5px; font-weight:500; }
+  .more-btn {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; border-radius:7px;
+    background:transparent; border:1px solid transparent;
+    color:var(--text-3); cursor:pointer;
+    transition:background .12s,border-color .12s,color .12s;
+  }
+  .more-btn:hover { background:var(--bg-soft); border-color:var(--border); color:var(--text); }
+  .more-btn svg { width:14px; height:14px; }
+
+  /* player dropdown portal */
+  .dropdown-portal {
+    position:fixed; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; min-width:160px;
+    box-shadow:var(--shadow-md); display:none; z-index:1000; overflow:hidden;
+  }
+  .dropdown-portal.show { display:block; }
+  .dropdown-portal .menu-item {
+    display:block; width:100%; text-align:left; background:transparent;
+    color:var(--text-2); border:none; padding:10px 14px;
+    font:inherit; font-size:13px; cursor:pointer;
+    border-bottom:1px solid var(--border); transition:background .12s,color .12s;
+  }
+  .dropdown-portal .menu-item:last-child { border-bottom:0; }
+  .dropdown-portal .menu-item:hover { background:var(--bg-soft); color:var(--text); }
+
+  /* EULA button (hidden until needed) */
+  #accept-eula { display:none; }
+  #accept-eula.show { display:inline-flex; }
+  .modal {
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(60,40,18,.35); z-index:1200; padding:20px;
+  }
+  .modal.show { display:flex; }
+  .modal-box {
+    width:min(460px,100%); background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); box-shadow:var(--shadow-md); overflow:hidden;
+  }
+  .modal-head { padding:16px 18px; border-bottom:1px solid var(--border); font-weight:600; }
+  .modal-body { padding:16px 18px; color:var(--text-2); font-size:13.5px; line-height:1.5; }
+  .modal-actions { display:flex; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .modal-actions a { text-decoration:none; }
+
+  /* ---------- MOTD marquee ---------- */
+  #info-motd { overflow:hidden; white-space:nowrap; word-break:normal; }
+  .motd-track { display:inline-block; white-space:nowrap; will-change:transform; }
+  @keyframes motd-scroll {
+    from { transform:translate3d(0,0,0); }
+    to   { transform:translate3d(var(--motd-shift),0,0); }
+  }
+  .motd-track.scrolling { animation:motd-scroll linear infinite; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="header">
-    <h1>Minecraft Server Dashboard</h1>
-    <div class="header-right">
-      <span class="badge"><b>Status</b> <span id="status-text">Unknown</span></span>
-      <span id="server-dot" class="dot stopped"></span>
-    </div>
-  </div>
+  <!-- ===== WORK AREA ===== -->
+  <div class="work">
 
-  <div class="toolbar">
-    <button id="start-server" class="btn primary"><i class="material-icons" style="font-size:18px;vertical-align:-3px">play_arrow</i> Start</button>
-    <button id="stop-server" class="btn"><i class="material-icons" style="font-size:18px;vertical-align:-3px">stop</i> Stop</button>
-    <button id="accept-eula" class="btn ghost"><i class="material-icons" style="font-size:18px;vertical-align:-3px">rule</i> Accept EULA</button>
-  </div>
+    <!-- hero -->
+    <section class="hero">
+      <div>
+        <h1>Server overview</h1>
+        <p class="lede" id="hero-lede">Manage your Minecraft server — start, stop and configure your world.</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary" id="start-server">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Start
+        </button>
+        <button class="btn btn-secondary disabled" id="stop-server">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          Stop
+        </button>
+        <button class="btn btn-secondary disabled" id="restart-server" title="Restart" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
+          </svg>
+          Restart
+        </button>
+      </div>
+    </section>
 
-  <div class="grid">
-    <div class="panel console-wrap">
-      <div class="title">Console</div>
-      <div id="console-output" class="console-output"></div>
-      <div class="console-inputbar">
-        <input id="console-input" class="input" type="text" placeholder="Enter command...">
-        <button id="send-command" class="btn">Send</button>
+    <!-- metrics -->
+    <section class="metrics">
+      <div class="metric">
+        <div class="metric-head">
+          <span>Players online</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+        </div>
+        <div class="metric-value"><span id="metric-players">0</span><small id="metric-players-max">/ — slots</small></div>
+        <div class="bar"><span id="metric-players-bar" style="width:0%"></span></div>
+        <div class="metric-meta"><span>Capacity</span><span id="metric-players-pct">0%</span></div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-head">
+          <span>CPU</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
+          </span>
+        </div>
+        <div class="metric-value"><span id="cpu-pct">—</span></div>
+        <div class="bar"><span id="cpu-bar" style="width:0%"></span></div>
+        <div class="metric-meta"><span id="loadavg">—</span></div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-head">
+          <span>Memory</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10v4M10 10v4M14 10v4M18 10v4"/></svg>
+          </span>
+        </div>
+        <div class="metric-value"><span id="mem-pct">—</span></div>
+        <div class="bar"><span id="mem-bar" style="width:0%"></span></div>
+        <div class="metric-meta"><span id="mem-detail">—</span></div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-head">
+          <span>Main storage</span>
+          <span class="metric-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 11v6c0 1.66 4 3 9 3s9-1.34 9-3v-6"/></svg>
+          </span>
+        </div>
+        <div class="metric-value"><span id="storage-pct">—</span></div>
+        <div class="bar"><span id="storage-bar" style="width:0%"></span></div>
+        <div class="metric-meta"><span id="storage-detail">—</span></div>
+      </div>
+    </section>
+
+    <!-- console -->
+    <div class="card console-card">
+      <div class="card-head">
+        <h2>Console</h2>
+        <div class="head-actions">
+          <button class="head-btn" id="accept-eula">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Accept EULA
+          </button>
+          <button class="head-btn" id="fullscreen-console" title="Fullscreen" aria-label="Open console fullscreen">
+            <svg class="icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/></svg>
+            <svg class="icon-collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v5H3"/><path d="M3 8l5-5"/><path d="M16 3v5h5"/><path d="m21 8-5-5"/><path d="M8 21v-5H3"/><path d="m3 16 5 5"/><path d="M16 21v-5h5"/><path d="m21 16-5 5"/></svg>
+            <span>Fullscreen</span>
+          </button>
+          <div class="fs-server-actions">
+            <button class="head-btn" id="fs-start-server">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              Start
+            </button>
+            <button class="head-btn disabled" id="fs-stop-server" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              Stop
+            </button>
+            <button class="head-btn disabled" id="fs-restart-server" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+              Restart
+            </button>
+          </div>
+          <button class="head-btn" id="clear-console">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            Clear
+          </button>
+        </div>
+      </div>
+      <div class="console-viewport">
+        <div class="console-wrap" id="console-output"></div>
+      </div>
+      <!-- thinking strip: shown while the server is starting -->
+      <div class="thinking is-hidden" id="thinking-strip" aria-live="polite">
+        <span class="spin" id="think-spin">⠋</span>
+        <span class="verb" id="think-verb">Starting</span>
+        <span class="sep">·</span>
+        <span class="phase" id="think-phase">loading mixins…</span>
+        <span class="elapsed" id="think-elapsed">0s</span>
+        <span class="sep">·</span>
+        <span class="hint"><kbd>esc</kbd> to cancel</span>
+      </div>
+      <div class="console-input">
+        <input id="console-input" type="text" placeholder="Enter command — e.g. /op Steve, /say hello, /weather clear" autocomplete="off" />
+        <button class="btn btn-primary" id="send-command">
+          Send
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
     </div>
 
-    <div class="side">
-      <div class="section">
-        <div class="title">Players <span id="players-count" class="count-badge">0</span></div>
-        <div id="player-list" class="players"></div>
-        <div style="padding:12px;border-top:1px solid var(--border);font-size:13px;color:#cbd5e1" id="players-empty">No active players</div>
-      </div>
-      <div class="section">
-        <div class="title">Server Info</div>
-      
-        <div class="filebox">
-          <span class="kit motd-chip"><b>MOTD</b><div class="motd-track"><div class="motd-inner"><span id="info-motd" class="motd-item">—</span><span class="motd-item motd-dup">—</span></div></div></span>
-          <div class="row">
-            <span class="kit"><b>Minecraft</b> <span id="info-version">—</span></span>
-            <span class="kit"><b>Uptime</b> <span id="info-uptime">—</span></span>
-            <span class="kit"><b>Java</b> <span id="info-java">—</span></span>
-            <span class="kit"><b>Public IP</b> <span id="info-public">—</span></span>
-            <span class="kit"><b>Local IP</b> <span id="info-local">—</span></span>
-            <span class="kit"><b>Port</b> <span id="info-port">—</span></span>
-            <span class="kit"><b>Online Mode</b> <span id="info-online">—</span></span>
+    <!-- right rail -->
+    <aside class="rail">
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Players <span class="chip" id="players-count-chip">0 / —</span></h2>
+        </div>
+        <div class="card-body" style="padding-top:0;padding-bottom:0;">
+          <div id="player-list"></div>
+          <div id="players-empty" class="players-empty">
+            <span class="ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </span>
+            <span>No active players</span>
+            <small>Waiting for someone to join…</small>
           </div>
         </div>
       </div>
-    </div>
-      <div class="section section-metrics">
-        <div class="title">System Metrics</div>
-        <div class="sysbox">
-          <div class="stat-row">
-            <div class="stat">
-              <div class="stat-head"><b>CPU</b> <span id="cpu-pct">—</span></div>
-              <div class="meter"><div id="cpu-bar" class="fill"></div></div>
-              <div class="stat-foot" id="loadavg">—</div>
-            </div>
-            <div class="stat">
-              <div class="stat-head"><b>Memory</b> <span id="mem-pct">—</span></div>
-              <div class="meter"><div id="mem-bar" class="fill"></div></div>
-              <div class="stat-foot" id="mem-detail">—</div>
-            </div>
-            <div class="stat">
-              <div class="stat-head"><b>Main Storage</b> <span id="storage-pct">—</span></div>
-              <div class="meter"><div id="storage-bar" class="fill"></div></div>
-              <div class="stat-foot" id="storage-detail">—</div>
-            </div>
+
+      <div class="card server-info">
+        <div class="card-head">
+          <h2>Server info</h2>
+          <span class="status-pill stopped" id="status-pill">
+            <span class="status-dot" id="server-dot"></span>
+            <span id="status-text">Unknown</span>
+          </span>
+        </div>
+        <div class="card-body">
+          <div class="info-row">
+            <span class="info-key">MOTD</span>
+            <span class="info-val" id="info-motd">—</span>
           </div>
-          <div class="disk-list" id="disk-list"></div>
+          <div class="info-row">
+            <span class="info-key">Version</span>
+            <span class="info-val" id="info-version">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Uptime</span>
+            <span class="info-val" id="info-uptime">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Java</span>
+            <span class="info-val mono" id="info-java">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Public IP</span>
+            <span class="info-val mono" id="info-public">—<span class="copy-icon" title="Copy">⧉</span></span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Local IP</span>
+            <span class="info-val mono" id="info-local">—<span class="copy-icon" title="Copy">⧉</span></span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Port</span>
+            <span class="info-val mono" id="info-port">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Online mode</span>
+            <span class="info-val" id="info-online">—</span>
+          </div>
+          <div class="info-row" id="info-row-mods" style="display:none">
+            <span class="info-key">Mods</span>
+            <span class="info-val" id="info-mods">—</span>
+          </div>
+          <div class="info-row" id="info-row-plugins" style="display:none">
+            <span class="info-key">Plugins</span>
+            <span class="info-val" id="info-plugins">—</span>
+          </div>
         </div>
       </div>
-  </div>
-</div>
 
-<!-- Toasts + Floating Dropdown Portal -->
-<div class="toast-wrap" id="toasts"></div>
+    </aside>
+  </div><!-- /work -->
+{% endblock %}
+
+{% block body_extras %}
 <div id="player-dropdown" class="dropdown-portal" role="menu" aria-hidden="true"></div>
-
-<div class="starting" id="start-modal">
-  <div class="box">
-    <div class="loader"></div>
-    <div>Starting server…</div>
+<div id="eula-modal" class="modal" aria-hidden="true">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="eula-modal-title">
+    <div class="modal-head" id="eula-modal-title">Accept Minecraft EULA</div>
+    <div class="modal-body">Do you want to accept the Minecraft End User License Agreement?</div>
+    <div class="modal-actions">
+      <a class="head-btn" href="https://www.minecraft.net/eula" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+        Read EULA Online
+      </a>
+      <button class="head-btn" id="eula-cancel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        Cancel
+      </button>
+      <button class="btn btn-primary" id="eula-accept-confirm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        Accept
+      </button>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded',()=> {
-  function motdToHtml(raw){
-    if(!raw) return ''
-    let s=String(raw)
-    const hexRe=/&#([0-9a-fA-F]{6})/g
-    s=s.replace(/§x(§[0-9a-fA-F]){6}/g, m=>{
-      const hex=m.replace(/§x/g,'').replace(/§/g,'').toLowerCase()
-      return `§#${hex}`
-    })
-    s=s.replace(hexRe,'§#$1')
-    const map={
-      '0':'#000000','1':'#0000aa','2':'#00aa00','3':'#00aaaa','4':'#aa0000','5':'#aa00aa','6':'#ffaa00','7':'#aaaaaa','8':'#555555','9':'#5555ff','a':'#55ff55','b':'#55ffff','c':'#ff5555','d':'#ff55ff','e':'#ffff55','f':'#ffffff'
-    }
-    let out=''
-    let color=null,bold=false,italic=false,under=false,strike=false
-    function open(){
-      let style=''
-      if(color) style+=`color:${color};`
-      let dec=[]
-      if(under) dec.push('underline')
-      if(strike) dec.push('line-through')
-      const fs=(bold?'font-weight:700;':'')+(italic?'font-style:italic;':'')+(dec.length?`text-decoration:${dec.join(' ')};`:'')
-      return `<span style="${style}${fs}">`
-    }
-    let i=0
-    let openTag=open()
-    while(i<s.length){
-      const ch=s[i]
-      if((ch==='§' || ch==='&') && i+1<s.length){
-        const code=s[i+1].toLowerCase()
-        if(code==='#'){
-          const hex=s.slice(i+2,i+8)
-          if(/^[0-9a-fA-F]{6}$/.test(hex)){
-            out+=`</span>`
-            color='#'+hex
-            openTag=open()
-            out+=openTag
-            i+=8
-            continue
-          }
-        }
-        if(map.hasOwnProperty(code)){
-          out+=`</span>`
-          color=map[code]
-          openTag=open()
-          out+=openTag
-          i+=2
-          continue
-        }
-        if(code==='r'){
-          out+=`</span>`
-          color=null;bold=false;italic=false;under=false;strike=false
-          openTag=open()
-          out+=openTag
-          i+=2
-          continue
-        }
-        if(code==='l'){ out+=`</span>`; bold=true; out+=openTag; i+=2; continue }
-        if(code==='o'){ out+=`</span>`; italic=true; out+=openTag; i+=2; continue }
-        if(code==='n'){ out+=`</span>`; under=true; out+=openTag; i+=2; continue }
-        if(code==='m'){ out+=`</span>`; strike=true; out+=openTag; i+=2; continue }
-        if(code==='k'){ i+=2; continue }
-      }
-      if(ch==='<'||ch==='>'||ch==='&'){
-        const esc={'<':'&lt;','>':'&gt;','&':'&amp;'}
-        out+=esc[ch]
-      }else{
-        out+=ch
-      }
-      i++
-    }
-    out+=`</span>`
-    return out
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* ---- helpers ---- */
+  function humanBytes(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return '—';
+    const u = ['B','KB','MB','GB','TB']; let i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return n.toFixed(i ? 1 : 0) + ' ' + u[i];
   }
-  function humanBytes(n){
-    if(typeof n!=='number'||!isFinite(n)) return '—'
-    const u=['B','KB','MB','GB','TB','PB']
-    let i=0
-    while(n>=1024&&i<u.length-1){n/=1024;i++}
-    return n.toFixed(i?1:0)+' '+u[i]
+  function setBar(elPct, elBar, pct) {
+    const p = Math.max(0, Math.min(100, Math.round(pct || 0)));
+    elPct.textContent = p + '%';
+    elBar.style.width = p + '%';
   }
 
-  function setBar(elPct, elBar, pct){
-    const p=Math.max(0,Math.min(100,Math.round(pct||0)))
-    elPct.textContent=p+'%'
-    elBar.style.width=p+'%'
-  }
-  function renderDisks(disks){
-    const wrap=document.getElementById('disk-list')
-    wrap.innerHTML=''
-    if(!disks||typeof disks!=='object') return
-    Object.keys(disks).forEach(path=>{
-      if(path==='/'||/instance/i.test(path)||/server/i.test(path)) return
-      const d = disks[path] || {}
-      const item = document.createElement('div')
-      item.className='disk-item'
-
-      const head=document.createElement('div')
-      head.className='disk-head'
-      const name=document.createElement('div')
-      const pct=document.createElement('div')
-
-      const meter=document.createElement('div')
-      meter.className='meter'
-      const fill=document.createElement('div')
-      fill.className='fill'
-      meter.appendChild(fill)
-
-      const foot=document.createElement('div')
-      foot.className='stat-foot'
-
-      name.textContent = path
-      pct.textContent=(d.percent!=null?Math.round(d.percent):'—')+(d.percent!=null?'%':'')
-      fill.style.width=(d.percent!=null?Math.round(d.percent):0)+'%'
-      foot.textContent=(d.used!=null&&d.total!=null)?humanBytes(d.used)+' / '+humanBytes(d.total):'—'
-
-      head.appendChild(name)
-      head.appendChild(pct)
-      item.appendChild(head)
-      item.appendChild(meter)
-      item.appendChild(foot)
-      wrap.appendChild(item)
-    })
-  }
-  function pollSystem(){
-    fetch('/system/metrics').then(r=>r.json()).then(m=>{
-      const cpuPct=document.getElementById('cpu-pct')
-      const cpuBar=document.getElementById('cpu-bar')
-      const memPct=document.getElementById('mem-pct')
-      const memBar=document.getElementById('mem-bar')
-      const load=document.getElementById('loadavg')
-      const memDetail=document.getElementById('mem-detail')
-      setBar(cpuPct,cpuBar, m.cpu_percent)
-      const la=m.loadavg||null
-      if(m.loadavg&&typeof m.loadavg==='object') load.textContent=la?[la['1m'],la['5m'],la['15m']].map(x=>Number(x).toFixed(2)).join(' / '):'—'
-      const mem=m.memory||{}
-      const used=(typeof mem.used==='number')?mem.used:((typeof mem.total==='number'&&typeof mem.available==='number')?(mem.total-mem.available):null)
-      const mpct=(typeof mem.percent==='number')?mem.percent:(mem.total? (100*used/mem.total):null)
-      setBar(memPct,memBar,mpct)
-      memDetail.textContent=(used!=null&&mem.total!=null)?humanBytes(used)+' / '+humanBytes(mem.total):'—'
-      // Main Storage stat (root disk '/')
-      const storagePctEl=document.getElementById('storage-pct')
-      const storageBarEl=document.getElementById('storage-bar')
-      const storageDetailEl=document.getElementById('storage-detail')
-      let root = null
-      if(m.disks && typeof m.disks==='object'){
-        if(m.disks['/']) root = m.disks['/']
-        else{
-          const k = Object.keys(m.disks).find(x=>x==='/'||/^\/$/.test(x))
-          root = k? m.disks[k] : null
-        }
-      }
-      if(root){
-        const dp = (root.percent!=null? Math.round(root.percent): null)
-        setBar(storagePctEl, storageBarEl, dp)
-        storageDetailEl.textContent = (root.used!=null&&root.total!=null)? (humanBytes(root.used)+' / '+humanBytes(root.total)) : '—'
-      } else {
-        setBar(storagePctEl, storageBarEl, 0)
-        storageDetailEl.textContent = '—'
-      }
-      if(m.disks) renderDisks(m.disks)
-    }).catch(()=>{})
-  }
-  setInterval(pollSystem,2500)
-  pollSystem()
-  const consoleEl=document.getElementById('console-output')
-  const sendBtn=document.getElementById('send-command')
-  const inputEl=document.getElementById('console-input')
-  const startBtn=document.getElementById('start-server')
-  const stopBtn=document.getElementById('stop-server')
-  const statusText=document.getElementById('status-text')
-  const dot=document.getElementById('server-dot')
-  const toasts=document.getElementById('toasts')
-  const playersEl=document.getElementById('player-list')
-  const playersEmpty=document.getElementById('players-empty')
-  const playersCount=document.getElementById('players-count')
-  const eulaBtn=document.getElementById('accept-eula')
-  const startModal=document.getElementById('start-modal')
-  const dropdown=document.getElementById('player-dropdown')
-  const exitRe=/Server process exited/i
-  let awaitingExit=false
-  let motdState={text:'', width:0}
-  let resizeTimer=null
+  /* ---- elements ---- */
+  const consoleEl     = document.getElementById('console-output');
+  const inputEl       = document.getElementById('console-input');
+  const sendBtn       = document.getElementById('send-command');
+  const startBtn      = document.getElementById('start-server');
+  const stopBtn       = document.getElementById('stop-server');
+  const restartBtn    = document.getElementById('restart-server');
+  const fsStartBtn    = document.getElementById('fs-start-server');
+  const fsStopBtn     = document.getElementById('fs-stop-server');
+  const fsRestartBtn  = document.getElementById('fs-restart-server');
+  const statusText    = document.getElementById('status-text');
+  const statusPill    = document.getElementById('status-pill');
+  const dot           = document.getElementById('server-dot');
+  const playersEl     = document.getElementById('player-list');
+  const playersEmpty  = document.getElementById('players-empty');
+  const playersChip   = document.getElementById('players-count-chip');
+  const eulaBtn       = document.getElementById('accept-eula');
+  const thinkingStrip = document.getElementById('thinking-strip');
+  const thinkSpin     = document.getElementById('think-spin');
+  const thinkVerb     = document.getElementById('think-verb');
+  const thinkPhase    = document.getElementById('think-phase');
+  const thinkElapsed  = document.getElementById('think-elapsed');
+  const dropdown      = document.getElementById('player-dropdown');
+  const clearBtn      = document.getElementById('clear-console');
+  const fullscreenBtn = document.getElementById('fullscreen-console');
+  const consoleCard   = document.querySelector('.console-card');
+  const eulaModal     = document.getElementById('eula-modal');
+  const eulaCancelBtn = document.getElementById('eula-cancel');
+  const eulaConfirmBtn = document.getElementById('eula-accept-confirm');
+  const stopBtnDefaultHtml = stopBtn.innerHTML;
+  const forceStopBtnHtml = stopBtnDefaultHtml.replace('Stop', 'Force');
+  const fsStopBtnDefaultHtml = fsStopBtn.innerHTML;
+  const fsForceStopBtnHtml = fsStopBtnDefaultHtml.replace('Stop', 'Force');
 
   const els = {
     version: document.getElementById('info-version'),
@@ -463,416 +664,694 @@ document.addEventListener('DOMContentLoaded',()=> {
     port:    document.getElementById('info-port'),
     motd:    document.getElementById('info-motd'),
     online:  document.getElementById('info-online'),
+    mods:    document.getElementById('info-mods'),
+    plugins: document.getElementById('info-plugins'),
+  };
+
+  let lastStatus = 'init';
+  let awaitingExit = false;
+  let isRebooting = false;
+  let rebootWatcher = null;
+  let lastMotdHtml = null;
+  let autoScroll = true;
+  let livePaused = false;
+  let pending = [];
+  let lastCount = 0;
+  let currentPlayer = null;
+  let currentAnchor = null;
+  let serverMaxPlayers = null;
+  let watcher = null;
+  let startCancelPending = false;
+  const opsSet = new Set();
+
+  const eulaRe  = /You need to agree to the EULA/i;
+  const eulaSetupRe = /(You need to agree to the EULA|Failed to load eula\.txt|Failed to load properties from file:\s*server\.properties|NoSuchFileException:\s*server\.properties)/i;
+  const readyRe = /\[Server thread\/INFO\]: Done/i;
+  const exitRe  = /Server process exited/i;
+  const errorRe = /(Exception|Error:|UnsupportedClassVersionError|Could not find or load main class|Address already in use|A fatal error has been detected|Failed|Failure)/i;
+
+  /* ---- console colorize ---- */
+  function colorize(line) {
+    if (/\[panel\]/i.test(line) || /\[Panel Command\]/i.test(line)) return 'from-panel';
+    if (line.includes('WARN'))  return 'warn';
+    if (line.includes('ERROR')) return 'error';
+    if (line.includes('advancement') && line.includes('[Server thread/INFO]')) return 'green';
+    if (line.includes('completed the challenge') && line.includes('[Server thread/INFO]')) return 'purple';
+    if (line.includes('reached the goal') && line.includes('[Server thread/INFO]')) return 'yellow';
+    return '';
   }
 
-  const eulaRe=/You need to agree to the EULA/i
-  const readyRe=/\[Server thread\/INFO\]: Done/i
-  const errorRe=/(Exception|Error:|UnsupportedClassVersionError|Could not find or load main class|Address already in use|A fatal error has been detected|Failed|Failure)/i
-  let lastStatus='init'
-  let currentPlayer=null
-  let currentAnchor=null
+  consoleEl.addEventListener('scroll', () => {
+    autoScroll = (consoleEl.scrollTop + consoleEl.clientHeight) >= consoleEl.scrollHeight - 8;
+  });
 
-  const opsSet=new Set()
-  function refreshOps(){
-    fetch('/ops').then(r=>r.ok?r.json():[]).then(list=>{
-      opsSet.clear()
-      ;(list||[]).forEach(n=>opsSet.add(typeof n==='string'?n:(n&&n.name?n.name:'')))
-    }).catch(()=>{})
+  function selectionInConsole() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
+    const r = sel.getRangeAt(0);
+    return consoleEl.contains(r.startContainer) && consoleEl.contains(r.endContainer);
   }
-
-  function avatarSrcFor(player){
-    const uuid=(typeof player==='object'&&player&&player.uuid)?player.uuid:null
-    if(uuid) return 'https://mc-heads.net/avatar/'+uuid+'/24'
-    const name=typeof player==='string'?player:(player&&player.name?player.name:'steve')
-    return 'https://mc-heads.net/avatar/'+encodeURIComponent(name)+'/24'
+  function applyPending() {
+    if (!pending.length) return;
+    const frag = document.createDocumentFragment();
+    pending.forEach(line => { const d = document.createElement('div'); d.className = 'log-line ' + colorize(line); d.textContent = line; frag.appendChild(d); });
+    consoleEl.appendChild(frag); pending.length = 0;
+    if (autoScroll) consoleEl.scrollTop = consoleEl.scrollHeight;
   }
+  document.addEventListener('selectionchange', () => {
+    const active = selectionInConsole();
+    if (active) { livePaused = true; return; }
+    if (livePaused && !active) { livePaused = false; applyPending(); }
+  });
 
-  function isOp(player){
-    if(typeof player==='object'&&player&&typeof player.op==='boolean') return player.op
-    const name=typeof player==='string'?player:(player&&player.name?player.name:'')
-    return opsSet.has(name)
-  }
-
-  function truncateName(name,maxLen){
-    if(!name) return ''
-    if(name.length<=maxLen) return name
-    return name.slice(0,Math.max(0,maxLen-1))+'…'
-  }
-
-  function setupMotdMarquee(){
-    {
-      const chip=document.querySelector('.motd-chip')
-      if(!chip) return
-      const track=chip.querySelector('.motd-track')
-      const inner=chip.querySelector('.motd-inner')
-      const s1=chip.querySelector('#info-motd')
-      const s2=chip.querySelector('.motd-dup') || chip.querySelector('.motd-item.motd-dup')
-      if(!track||!inner||!s1||!s2) return
-      const view=Math.round(track.clientWidth)
-      const text = s1.innerHTML
-      const sameText=(text===motdState.text)
-      const widthUnchanged=(Math.abs(view - motdState.width) < 4)
-      if(sameText && widthUnchanged) return
-      const content=Math.round(s1.scrollWidth + 40)
-      if(content > view + 8){
-        const pxPerSec=35
-        const dur=Math.max(12, content/pxPerSec)
-        chip.style.setProperty('--motd-dur', dur+'s')
-        s2.innerHTML=s1.innerHTML
-        chip.classList.add('marquee')
-      }else{
-        chip.classList.remove('marquee')
-        s2.innerHTML=''
-        inner.style.transform='translateX(0)'
-      }
-      motdState={text: s1.innerHTML, width:view}
-    }
-  }
-
-  function toast(title,msg,type,actions){
-    const t=document.createElement('div')
-    t.className='toast '+(type||'')
-    t.innerHTML='<div class="t-content"><div class="t-title">'+title+'</div><div class="t-msg">'+(msg||'')+'</div></div>'
-    const act=document.createElement('div')
-    act.className='t-actions'
-    ;(actions||[]).forEach(a=>{const b=document.createElement('button');b.className='t-btn';b.textContent=a.label;b.onclick=()=>{a.onClick&&a.onClick();close()};act.appendChild(b)})
-    t.appendChild(act)
-    toasts.appendChild(t)
-    function close(){t.style.animation='toast-out .16s ease forwards';setTimeout(()=>t.remove(),160)}
-    setTimeout(close,4500)
-    return {close}
-  }
-
-  function colorize(line){
-    if(/\[panel\]/i.test(line)) return 'from-panel'
-    if(line.includes("WARN")) return 'warn'
-    if(line.includes("ERROR")) return 'error'
-    if(line.includes("advancement")&&line.includes("[Server thread/INFO]")&&!line.match(/ඞ.*?ඞ/)) return 'green'
-    if(line.includes("completed the challenge")&&line.includes("[Server thread/INFO]")&&!line.match(/ඞ.*?ඞ/)) return 'purple'
-    if(line.includes("reached the goal")&&line.includes("[Server thread/INFO]")&&!line.match(/ඞ.*?ඞ/)) return 'yellow'
-    return ''
-  }
-
-  function appendLine(line){
-    const div=document.createElement('div')
-    div.className=colorize(line)
-    div.textContent=line
-    consoleEl.appendChild(div)
-  }
-
-  let autoScroll=true
-  consoleEl.addEventListener('scroll',()=>{
-    const nearBottom=(consoleEl.scrollTop+consoleEl.clientHeight)>=consoleEl.scrollHeight-8
-    autoScroll=nearBottom
-  })
-
-  let lastCount=0
-  let livePaused=false
-  let pending=[]
-
-  function selectionInsideConsole(){
-    const sel=window.getSelection()
-    if(!sel||sel.isCollapsed||sel.rangeCount===0) return false
-    const r=sel.getRangeAt(0)
-    return consoleEl.contains(r.startContainer)&&consoleEl.contains(r.endContainer)
-  }
-
-  function applyPending(){
-    if(!pending.length) return
-    const frag=document.createDocumentFragment()
-    for(const line of pending){ const div=document.createElement('div'); div.className=colorize(line); div.textContent=line; frag.appendChild(div) }
-    consoleEl.appendChild(frag)
-    pending.length=0
-    if(autoScroll) consoleEl.scrollTop=consoleEl.scrollHeight
-  }
-
-  document.addEventListener('selectionchange',()=>{
-    const active=selectionInsideConsole()
-    if(active){ livePaused=true; return }
-    if(livePaused&&!active){ livePaused=false; applyPending() }
-  })
-
-  function showEula(){ eulaBtn.classList.add('show') }
-  function hideEula(){ eulaBtn.classList.remove('show') }
-  hideEula()
-
-  eulaBtn.addEventListener('click', ()=>{
-    fetch('/accept-eula',{method:'POST'})
-      .then(r=>r.text())
-      .then(()=> toast('EULA','Accepted. Restart the server to apply.','ok'))
-      .catch(()=> toast('EULA','Failed to accept.','err'))
-  })
-
-  function fetchConsole(){
-    fetch('/get-console-output').then(r=>r.json()).then(data=>{
-      if(lastCount===0&&consoleEl.childNodes.length===0){
-        const frag=document.createDocumentFragment()
-        for(const line of data){ const div=document.createElement('div'); div.className=colorize(line); div.textContent=line; frag.appendChild(div) }
-        consoleEl.appendChild(frag)
-        lastCount=data.length
-        consoleEl.scrollTop=consoleEl.scrollHeight
-        return
-      }
-      if(data.length>lastCount){
-        const inc=data.slice(lastCount)
-        lastCount=data.length
-        if(inc.some(l=>eulaRe.test(l))) showEula()
-        if(inc.some(l=>readyRe.test(l))) hideEula()
-        if(inc.some(l=>exitRe.test(l))){
-          awaitingExit=false
-          setButtonsForRunning(false)
-          statusText.textContent='Stopped'
-          dot.classList.remove('running')
-          dot.classList.add('stopped')
-        }
-        if(livePaused){ pending.push(...inc); return }
-        const frag=document.createDocumentFragment()
-        for(const line of inc){ const div=document.createElement('div'); div.className=colorize(line); div.textContent=line; frag.appendChild(div) }
-        consoleEl.appendChild(frag)
-        if(autoScroll) consoleEl.scrollTop=consoleEl.scrollHeight
-      }
-    })
-  }
-
-  function sendCommand(){
-    const cmd=inputEl.value.trim()
-    if(!cmd) return
-    fetch('/send-command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})})
-      .then(r=>r.json()).then(()=>{inputEl.value=''})
-  }
-  sendBtn.onclick=sendCommand
-  inputEl.addEventListener('keydown',e=>{if(e.key==='Enter')sendCommand()})
-
-  function setButtonsForRunning(running){
-    if(running){
-      startBtn.classList.add('disabled')
-      startBtn.classList.remove('primary')
-      startBtn.disabled=true
-      stopBtn.classList.add('primary')
-      stopBtn.classList.remove('disabled')
-      stopBtn.disabled=false
-    }else{
-      stopBtn.classList.add('disabled')
-      stopBtn.classList.remove('primary')
-      stopBtn.disabled=true
-      startBtn.classList.add('primary')
-      startBtn.classList.remove('disabled')
-      startBtn.disabled=false
-    }
-  }
-
-  function updateStatus(){
-    fetch('/server-status').then(r=>r.json()).then(s=>{
-      const st=s.status
-      statusText.textContent=st.charAt(0).toUpperCase()+st.slice(1)
-      const running=(st==='running')
-      dot.classList.toggle('running',running)
-      dot.classList.toggle('stopped',!running)
-      if(running){
-        setButtonsForRunning(true)
-        awaitingExit=false
-      }else{
-        if(!awaitingExit) setButtonsForRunning(false)
-      }
-      if(lastStatus!=='crashed'&&st==='crashed'){
-        toast('Server Crashed','The server process is no longer running','err')
-      }
-      lastStatus=st
-    })
-  }
-
-  function sendAction(act,player,extra){
-    fetch('/'+act,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({player},extra||{}))})
-      .then(r=>r.json()).then(()=>toast('Action',act+' sent','ok')).catch(()=>toast('Action','Failed','err'))
-  }
-
-  function renderPlayerRow(player){
-    const rawName=typeof player==='string'?player:(player&&player.name?player.name:'')
-    const shortName=truncateName(rawName,16)
-    const op=isOp(player)
-    const row=document.createElement('div')
-    row.className='player'
-    row.innerHTML='<div style="display:flex;align-items:center;gap:10px"><img class="head" alt="" width="24" height="24" style="border-radius:4px;image-rendering:pixelated"><span class="name" title="'+rawName+'">'+shortName+'</span>'+(op?'<span aria-label="OP" title="Operator" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#1b2a1f;border:1px solid #27422f;font-size:12px">★</span>':'')+'</div><button class="more-btn" aria-haspopup="true" aria-expanded="false"><span class="material-icons" style="font-size:18px;opacity:.8">more_vert</span></button>'
-    const img=row.querySelector('img.head')
-    img.src=avatarSrcFor(player)
-    img.referrerPolicy='no-referrer'
-    img.decoding='async'
-    return row
-  }
-
-  function closeDropdown(){
-    dropdown.classList.remove('show')
-    dropdown.setAttribute('aria-hidden','true')
-    currentPlayer=null
-    currentAnchor=null
-  }
-
-  function buildDropdown(){
-    dropdown.innerHTML = `
-      <button class="menu-item" data-act="kick">Kick</button>
-      <button class="menu-item" data-act="ban">Ban</button>
-      <button class="menu-item" data-act="op">OP</button>
-      <button class="menu-item" data-act="kill">Kill</button>
-      <button class="menu-item" data-act="pardon">Pardon</button>
-      <button class="menu-item" data-act="deop">DeOP</button>
-    `
-  }
-
-  function positionDropdown(anchorBtn){
-    dropdown.style.visibility='hidden'
-    dropdown.classList.add('show')
-    const rect = anchorBtn.getBoundingClientRect()
-    const pad = 6
-    const dw = dropdown.offsetWidth
-    const left = Math.max(12, rect.right - dw)
-    const top = rect.bottom + pad
-    dropdown.style.left = left + 'px'
-    dropdown.style.top = top + 'px'
-    dropdown.style.visibility='visible'
-  }
-
-  playersEl.addEventListener('click', e=>{
-    const btn = e.target.closest('.more-btn')
-    if(btn){
-      const row = btn.closest('.player')
-      const name = row.querySelector('.name').textContent.replace(/…$/,'')
-      if(currentPlayer === name && dropdown.classList.contains('show')){
-        closeDropdown()
-        return
-      }
-      currentPlayer = name
-      currentAnchor = btn
-      buildDropdown()
-      positionDropdown(btn)
-      dropdown.setAttribute('aria-hidden','false')
-      dropdown.classList.add('show')
-      return
-    }
-  })
-
-  dropdown.addEventListener('click', e=>{
-    const item = e.target.closest('.menu-item')
-    if(!item || !currentPlayer) return
-    const act = item.dataset.act
-    if(act==='kick') sendAction('kick',currentPlayer,{reason:'Kicked by Admin'})
-    else if(act==='ban') sendAction('ban',currentPlayer,{reason:'Banned by Admin'})
-    else if(act==='op') sendAction('op',currentPlayer)
-    else if(act==='kill') sendAction('kill',currentPlayer)
-    else if(act==='pardon') sendAction('pardon',currentPlayer)
-    else if(act==='deop') sendAction('deop',currentPlayer)
-    closeDropdown()
-  })
-
-  document.addEventListener('click', e=>{
-    if(dropdown.classList.contains('show')){
-      const clickedInsideDropdown = e.target.closest('#player-dropdown')
-      const clickedAnchor = e.target.closest('.more-btn')
-      if(!clickedInsideDropdown && (!clickedAnchor || clickedAnchor!==currentAnchor)){
-        closeDropdown()
-      }
-    }
-  })
-
-  window.addEventListener('resize', closeDropdown)
-  window.addEventListener('scroll', closeDropdown, true)
-
-  function updatePlayers(){
-    fetch('/get-players').then(r=>r.json()).then(list=>{
-      playersEl.innerHTML=''
-      list.forEach(p=>playersEl.appendChild(renderPlayerRow(p)))
-      playersEmpty.style.display=list.length? 'none':'block'
-      playersCount.textContent=String(list.length)
-      const names=list.map(x=>typeof x==='string'?x:(x&&x.name?x.name:'')) 
-      if(currentPlayer && !names.includes(currentPlayer)) closeDropdown()
-    })
-  }
-
-  function set(el, val){ el.textContent = (val ?? '—') }
-
-  function fetchServerInfo(){
-    fetch('/server-info')
-      .then(r=>r.json())
-      .then(info=>{
-        set(els.version, info.mc_version || 'Unknown')
-        set(els.java, info.java_version || 'Unknown')
-        set(els.uptime, info.uptime_human || '—')
-        set(els.public, info.public_ip || '—')
-        set(els.local, info.local_ip || '—')
-        set(els.port, info.port || '—')
-        const motdRaw = info.motd || '—'
-        els.motd.innerHTML = motdToHtml(motdRaw)
-        setupMotdMarquee()
-        set(els.online, info.online_mode === true ? 'true' : (info.online_mode === false ? 'false' : '—'))
+  clearBtn.addEventListener('click', () => {
+    fetch('/clear-console-output', { method: 'POST' })
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        consoleEl.innerHTML = '';
+        pending.length = 0;
+        lastCount = 0;
+        autoScroll = true;
       })
+      .catch(() => toast('Console', 'Failed to clear output', 'err'));
+  });
+
+  function currentFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+  function updateFullscreenButton() {
+    const active = currentFullscreenElement() === consoleCard;
+    fullscreenBtn.classList.toggle('is-fullscreen', active);
+    fullscreenBtn.querySelector('span').textContent = active ? 'Exit fullscreen' : 'Fullscreen';
+    fullscreenBtn.title = active ? 'Exit fullscreen' : 'Fullscreen';
+    fullscreenBtn.setAttribute('aria-label', active ? 'Exit console fullscreen' : 'Open console fullscreen');
+  }
+  function requestConsoleFullscreen() {
+    const request = consoleCard.requestFullscreen || consoleCard.webkitRequestFullscreen;
+    if (request) request.call(consoleCard);
+  }
+  function exitConsoleFullscreen() {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+  }
+  fullscreenBtn.addEventListener('click', () => {
+    if (currentFullscreenElement() === consoleCard) exitConsoleFullscreen();
+    else requestConsoleFullscreen();
+  });
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+
+  /* ---- thinking-strip animation ---- */
+  const SPIN_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+  const THINK_VERBS = ['Starting'];
+  let thinkSpinFrame = 0;
+  let thinkElapsedSec = 0;
+  let thinkSpinTimer = null, thinkElapsedTimer = null;
+
+  function cleanConsolePhase(line) {
+    const raw = String(line || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    return raw
+      .replace(/^Command:\s*/i, '')
+      .replace(/^\[panel\]\s*/i, 'panel: ')
+      .replace(/^\[\d{2}:\d{2}:\d{2}\]\s+\[[^\]]+\]:\s*/, '')
+      .replace(/^\[[^\]]+\]\s*/, '')
+      .slice(0, 120);
   }
 
-  window.addEventListener('resize', ()=>{
-    clearTimeout(resizeTimer)
-    resizeTimer=setTimeout(()=>setupMotdMarquee(),150)
-  })
-
-  let watcher=null
-  let baselineCount=0
-
-  function getLines(){
-    const lines=[]
-    consoleEl.childNodes.forEach(n=>{ if(n.nodeType===1) lines.push(n.textContent||'') })
-    return lines
+  function updateThinkingFromConsole(line) {
+    if (thinkingStrip.classList.contains('is-hidden')) return;
+    const phase = cleanConsolePhase(line);
+    if (!phase || exitRe.test(phase)) return;
+    thinkPhase.classList.add('swap');
+    setTimeout(() => {
+      thinkPhase.textContent = phase;
+      thinkPhase.classList.remove('swap');
+    }, 120);
   }
 
-  function startWatching(){
-    stopWatching()
-    baselineCount=getLines().length
-    watcher=setInterval(()=>{
-      const lines=getLines()
-      const recent=lines.slice(baselineCount)
-      if(!recent.length) return
-      if(recent.some(l=>readyRe.test(l))){
-        startModal.style.display='none'
-        toast('Server Ready','Done loading','ok')
-        stopWatching()
-        return
+  function startThinkingStrip() {
+    thinkSpinFrame = 0; thinkElapsedSec = 0;
+    thinkSpin.textContent = SPIN_FRAMES[0];
+    thinkVerb.textContent = 'Starting';
+    thinkPhase.textContent = 'waiting for server output...';
+    thinkPhase.classList.remove('swap');
+    thinkElapsed.textContent = '0s';
+    thinkingStrip.classList.remove('is-hidden', 'is-done');
+
+    thinkSpinTimer = setInterval(() => {
+      thinkSpin.textContent = SPIN_FRAMES[thinkSpinFrame = (thinkSpinFrame + 1) % SPIN_FRAMES.length];
+    }, 90);
+
+    thinkElapsedTimer = setInterval(() => {
+      thinkElapsedSec += 1;
+      thinkElapsed.textContent = thinkElapsedSec + 's';
+    }, 1000);
+  }
+
+  function stopThinkingStrip(mode) {
+    clearInterval(thinkSpinTimer);
+    clearInterval(thinkElapsedTimer);
+    thinkingStrip.classList.remove('is-rebooting');
+    if (mode === 'ready') {
+      thinkSpin.textContent = '✓';
+      thinkVerb.textContent = 'Ready';
+      thinkPhase.textContent = 'world loaded · listening on :25565';
+      thinkingStrip.classList.add('is-done');
+      setTimeout(() => thinkingStrip.classList.add('is-hidden'), 2200);
+    } else if (mode === 'stopped') {
+      thinkSpin.textContent = '✓';
+      thinkVerb.textContent = 'Stopped';
+      thinkPhase.textContent = 'server offline · all data saved';
+      thinkingStrip.classList.add('is-stopped');
+      setTimeout(() => thinkingStrip.classList.add('is-hidden'), 2200);
+    } else {
+      thinkingStrip.classList.add('is-hidden');
+    }
+  }
+
+  function startStoppingStrip() {
+    clearInterval(thinkSpinTimer);
+    clearInterval(thinkElapsedTimer);
+    thinkSpinFrame = 0; thinkElapsedSec = 0;
+    thinkSpin.textContent = SPIN_FRAMES[0];
+    thinkVerb.textContent = 'Stopping';
+    thinkPhase.textContent = 'waiting for shutdown output...';
+    thinkPhase.classList.remove('swap');
+    thinkElapsed.textContent = '0s';
+    thinkingStrip.classList.remove('is-hidden', 'is-done', 'is-stopped');
+
+    thinkSpinTimer = setInterval(() => {
+      thinkSpin.textContent = SPIN_FRAMES[thinkSpinFrame = (thinkSpinFrame + 1) % SPIN_FRAMES.length];
+    }, 90);
+
+    thinkElapsedTimer = setInterval(() => {
+      thinkElapsedSec += 1;
+      thinkElapsed.textContent = thinkElapsedSec + 's';
+    }, 1000);
+  }
+
+  function startRebootingStrip() {
+    clearInterval(thinkSpinTimer);
+    clearInterval(thinkElapsedTimer);
+    thinkSpinFrame = 0; thinkElapsedSec = 0;
+    thinkSpin.textContent = SPIN_FRAMES[0];
+    thinkVerb.textContent = 'Rebooting';
+    thinkPhase.textContent = 'stopping server…';
+    thinkPhase.classList.remove('swap');
+    thinkElapsed.textContent = '0s';
+    thinkingStrip.classList.remove('is-hidden', 'is-done', 'is-stopped');
+    thinkingStrip.classList.add('is-rebooting');
+
+    thinkSpinTimer = setInterval(() => {
+      thinkSpin.textContent = SPIN_FRAMES[thinkSpinFrame = (thinkSpinFrame + 1) % SPIN_FRAMES.length];
+    }, 90);
+
+    thinkElapsedTimer = setInterval(() => {
+      thinkElapsedSec += 1;
+      thinkElapsed.textContent = thinkElapsedSec + 's';
+    }, 1000);
+  }
+
+  function setConsoleStarting(active) {
+    startCancelPending = false;
+    if (active) startThinkingStrip();
+    else stopThinkingStrip(false);
+  }
+
+  /* ---- console polling ---- */
+  function fetchConsole() {
+    fetch('/get-console-output').then(r => r.json()).then(data => {
+      if (lastCount === 0 && consoleEl.childNodes.length === 0) {
+        const frag = document.createDocumentFragment();
+        data.forEach(line => { const d = document.createElement('div'); d.className = 'log-line ' + colorize(line); d.textContent = line; frag.appendChild(d); });
+        consoleEl.appendChild(frag); lastCount = data.length; consoleEl.scrollTop = consoleEl.scrollHeight; return;
       }
-      const err=recent.slice().reverse().find(l=>errorRe.test(l))
-      if(err){
-        startModal.style.display='none'
-        toast('Start Failed',err,'err')
-        stopWatching()
+      if (data.length > lastCount) {
+        const inc = data.slice(lastCount); lastCount = data.length;
+        inc.forEach(updateThinkingFromConsole);
+        if (inc.some(l => eulaRe.test(l)))  showEula();
+        if (inc.some(l => readyRe.test(l))) hideEula();
+        if (inc.some(l => exitRe.test(l)))  { awaitingExit = false; setButtonsForRunning(false); statusText.textContent = 'Stopped'; setStatusStyle(false, 'stopped'); if (!isRebooting) { if (thinkingStrip.classList.contains('is-hidden')) stopThinkingStrip(false); else stopThinkingStrip('stopped'); } }
+        if (livePaused) { pending.push(...inc); return; }
+        const frag = document.createDocumentFragment();
+        inc.forEach(line => { const d = document.createElement('div'); d.className = 'log-line ' + colorize(line); d.textContent = line; frag.appendChild(d); });
+        consoleEl.appendChild(frag);
+        if (autoScroll) consoleEl.scrollTop = consoleEl.scrollHeight;
       }
-    },500)
+    }).catch(() => {});
   }
 
-  function stopWatching(){
-    if(watcher){ clearInterval(watcher); watcher=null }
+  /* ---- send command ---- */
+  function sendCommand() {
+    const cmd = inputEl.value.trim(); if (!cmd) return;
+    fetch('/send-command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: cmd }) })
+      .then(r => r.json()).then(() => { inputEl.value = ''; });
+  }
+  sendBtn.onclick = sendCommand;
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendCommand(); });
+
+  /* ---- EULA ---- */
+  function showEula() { eulaBtn.classList.add('show'); }
+  function hideEula() { eulaBtn.classList.remove('show'); }
+  function openEulaModal() { eulaModal.classList.add('show'); eulaModal.setAttribute('aria-hidden', 'false'); }
+  function closeEulaModal() { eulaModal.classList.remove('show'); eulaModal.setAttribute('aria-hidden', 'true'); }
+  hideEula();
+  eulaBtn.addEventListener('click', openEulaModal);
+  eulaCancelBtn.addEventListener('click', closeEulaModal);
+  eulaModal.addEventListener('click', e => { if (e.target === eulaModal) closeEulaModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && eulaModal.classList.contains('show')) closeEulaModal(); });
+  eulaConfirmBtn.addEventListener('click', () => {
+    fetch('/accept-eula', { method: 'POST' })
+      .then(() => { closeEulaModal(); toast('EULA', 'Accepted. Restart the server to apply.', 'ok'); })
+      .catch(() => toast('EULA', 'Failed to accept.', 'err'));
+  });
+
+  /* ---- status ---- */
+  function setStatusStyle(running, status) {
+    statusPill.classList.toggle('stopped', !running && status !== 'crashed');
+    statusPill.classList.toggle('crashed', status === 'crashed');
+  }
+  function setButtonDisabled(btn, disabled) {
+    btn.classList.toggle('disabled', disabled);
+    btn.disabled = disabled;
+  }
+  function setButtonsForRunning(running) {
+    if (running) {
+      [startBtn, fsStartBtn].forEach(btn => setButtonDisabled(btn, true));
+      [stopBtn, fsStopBtn, restartBtn, fsRestartBtn].forEach(btn => setButtonDisabled(btn, false));
+    } else {
+      [stopBtn, fsStopBtn, restartBtn, fsRestartBtn].forEach(btn => setButtonDisabled(btn, true));
+      [startBtn, fsStartBtn].forEach(btn => setButtonDisabled(btn, false));
+    }
+  }
+  function setStopButtonMode(mode) {
+    const force = mode === 'force';
+    stopBtn.innerHTML = force ? forceStopBtnHtml : stopBtnDefaultHtml;
+    fsStopBtn.innerHTML = force ? fsForceStopBtnHtml : fsStopBtnDefaultHtml;
+    stopBtn.dataset.mode = force ? 'force' : 'normal';
+    fsStopBtn.dataset.mode = force ? 'force' : 'normal';
+    stopBtn.title = force ? 'Force shutdown immediately' : '';
+    fsStopBtn.title = force ? 'Force shutdown immediately' : '';
+    stopBtn.setAttribute('aria-label', force ? 'Force server stop immediately' : 'Stop server');
+    fsStopBtn.setAttribute('aria-label', force ? 'Force server stop immediately' : 'Stop server');
   }
 
-  startBtn.onclick=()=>{
+  function updateStatus() {
+    fetch('/server-status').then(r => r.json()).then(s => {
+      const st = s.status;
+      statusText.textContent = st.charAt(0).toUpperCase() + st.slice(1);
+      const running = (st === 'running');
+      setStatusStyle(running, st);
+      if (running) { setStopButtonMode('normal'); setButtonsForRunning(true); awaitingExit = false; }
+      else if (st === 'stopping' || (awaitingExit && s.alive)) { setStopButtonMode('force'); [stopBtn, fsStopBtn].forEach(btn => setButtonDisabled(btn, false)); [restartBtn, fsRestartBtn, startBtn, fsStartBtn].forEach(btn => setButtonDisabled(btn, true)); }
+      else { setStopButtonMode('normal'); if (!awaitingExit) setButtonsForRunning(false); }
+      if (lastStatus !== 'crashed' && st === 'crashed') toast('Server Crashed', 'The server process is no longer running', 'err');
+      lastStatus = st;
+    }).catch(() => {});
+  }
+
+  /* ---- start / stop / restart ---- */
+  function startWatching() {
+    stopWatching();
+    const baseline = consoleEl.childNodes.length;
+    watcher = setInterval(() => {
+      const lines = []; consoleEl.childNodes.forEach(n => { if (n.nodeType === 1) lines.push(n.textContent || ''); });
+      const recent = lines.slice(baseline); if (!recent.length) return;
+      if (recent.some(l => readyRe.test(l))) { startCancelPending = false; stopThinkingStrip('ready'); toast('Server Ready', 'Done loading', 'ok'); stopWatching(); return; }
+      if (recent.some(l => eulaRe.test(l))) { startCancelPending = false; setConsoleStarting(false); showEula(); toast('EULA Required', 'Accept the EULA, then start the server again.', 'warn', null, 7000); stopWatching(); return; }
+      const err = recent.slice().reverse().find(l => errorRe.test(l) && !eulaSetupRe.test(l));
+      if (err) { startCancelPending = false; setConsoleStarting(false); toast('Start Failed', err, 'err'); stopWatching(); }
+    }, 500);
+  }
+  function stopWatching() { if (watcher) { clearInterval(watcher); watcher = null; } }
+
+  function stopRebootWatcher() {
+    if (rebootWatcher) { clearInterval(rebootWatcher); rebootWatcher = null; }
+    isRebooting = false;
+  }
+
+  function startRebootWatcher() {
+    stopRebootWatcher();
+    isRebooting = true;
+    let rebootPhase = 'stopping';
+    const baseline = consoleEl.childNodes.length;
+
+    rebootWatcher = setInterval(() => {
+      const lines = [];
+      consoleEl.childNodes.forEach(n => { if (n.nodeType === 1) lines.push(n.textContent || ''); });
+      const recent = lines.slice(baseline);
+      if (!recent.length) return;
+
+      if (recent.some(l => readyRe.test(l))) {
+        stopRebootWatcher();
+        stopThinkingStrip('ready');
+        toast('Server Ready', 'Reboot complete', 'ok');
+        return;
+      }
+
+      if (rebootPhase === 'stopping' && recent.some(l => /\[panel\] restart: starting/i.test(l))) {
+        rebootPhase = 'starting';
+        thinkPhase.classList.add('swap');
+        setTimeout(() => {
+          thinkVerb.textContent = 'Starting';
+          thinkPhase.textContent = 'loading server…';
+          thinkPhase.classList.remove('swap');
+        }, 120);
+        return;
+      }
+
+      if (rebootPhase === 'starting') {
+        if (recent.some(l => eulaRe.test(l))) {
+          stopRebootWatcher();
+          stopThinkingStrip(false);
+          showEula();
+          return;
+        }
+        const err = recent.slice().reverse().find(l => errorRe.test(l) && !eulaSetupRe.test(l));
+        if (err) {
+          stopRebootWatcher();
+          stopThinkingStrip(false);
+          toast('Restart Failed', err, 'err');
+        }
+      }
+    }, 500);
+  }
+
+  function cancelStartingServer() {
+    if (thinkingStrip.classList.contains('is-hidden') || startCancelPending) return;
+    const verb = (thinkVerb.textContent || '').toLowerCase();
+    if (!THINK_VERBS.some(v => v.toLowerCase() === verb)) return;
+    startCancelPending = true;
+    awaitingExit = true;
+    stopWatching();
+    startStoppingStrip();
+    fetch('/cancel-start', { method: 'POST' })
+      .then(r => r.json().then(j => ({ ok: r.ok, body: j })).catch(() => ({ ok: r.ok, body: {} })))
+      .then(({ ok, body }) => {
+        if (!ok) throw new Error(body.error || 'Unable to cancel startup');
+        toast('Cancelled', body.message || 'Server startup cancelled', 'ok');
+      })
+      .catch(e => {
+        startCancelPending = false;
+        setConsoleStarting(false);
+        awaitingExit = false;
+        toast('Cancel Failed', String(e), 'err');
+      });
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') cancelStartingServer();
+  });
+
+  startBtn.onclick = () => {
     fetch('/start')
-      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.text() })
-      .then(()=>{ toast('Starting','Server is starting','ok'); startModal.style.display='flex'; startWatching() })
-      .catch(e=>{ startModal.style.display='none'; toast('Start Failed',String(e),'err') })
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(() => { toast('Starting', 'Server is starting…', 'ok'); setConsoleStarting(true); startWatching(); })
+      .catch(e => { setConsoleStarting(false); toast('Start Failed', String(e), 'err'); });
+  };
+  stopBtn.onclick = () => {
+    startCancelPending = false; awaitingExit = true; stopWatching();
+    if (stopBtn.dataset.mode === 'force') {
+      fetch('/force-stop', { method: 'POST' })
+        .then(r => r.json()).then(j => { awaitingExit = false; setStopButtonMode('normal'); stopThinkingStrip('stopped'); toast('Stopped', j.message || 'Server stopped immediately', 'ok'); })
+        .catch(() => toast('Error', 'Failed to force shutdown', 'err'));
+      return;
+    }
+    setStopButtonMode('force'); startStoppingStrip();
+    fetch('/stop').then(r => r.json()).then(j => toast('Stopping', j.message || 'Stopping server…', 'ok')).catch(() => { setStopButtonMode('normal'); stopThinkingStrip(false); toast('Error', 'Failed to stop', 'err'); });
+  };
+  restartBtn.onclick = () => {
+    if (restartBtn.disabled) return;
+    startRebootingStrip();
+    startRebootWatcher();
+    fetch('/restart', { method: 'POST' })
+      .then(r => r.json()).then(j => toast('Restarting', j.message || 'Server is restarting…', 'ok'))
+      .catch(() => { stopRebootWatcher(); stopThinkingStrip(false); toast('Error', 'Failed to restart', 'err'); });
+  };
+  fsStartBtn.addEventListener('click', () => startBtn.click());
+  fsStopBtn.addEventListener('click', () => stopBtn.click());
+  fsRestartBtn.addEventListener('click', () => restartBtn.click());
+
+  /* ---- players ---- */
+  function refreshOps() {
+    fetch('/ops').then(r => r.ok ? r.json() : []).then(list => { opsSet.clear(); (list || []).forEach(n => opsSet.add(typeof n === 'string' ? n : (n && n.name ? n.name : ''))); }).catch(() => {});
+  }
+  function isOp(player) {
+    if (typeof player === 'object' && player && typeof player.op === 'boolean') return player.op;
+    const name = typeof player === 'string' ? player : (player && player.name ? player.name : '');
+    return opsSet.has(name);
+  }
+  function avatarSrc(player) {
+    const uuid = (typeof player === 'object' && player && player.uuid) ? player.uuid : null;
+    if (uuid) return 'https://mc-heads.net/avatar/' + uuid + '/24';
+    const name = typeof player === 'string' ? player : (player && player.name ? player.name : 'steve');
+    return 'https://mc-heads.net/avatar/' + encodeURIComponent(name) + '/24';
+  }
+  function renderPlayerRow(player) {
+    const rawName = typeof player === 'string' ? player : (player && player.name ? player.name : '');
+    const op = isOp(player);
+    const row = document.createElement('div'); row.className = 'player';
+    row.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+      <img alt="" width="24" height="24" style="border-radius:4px;image-rendering:pixelated" referrerpolicy="no-referrer">
+      <span class="pname" title="${rawName}">${rawName.length > 16 ? rawName.slice(0,15) + '…' : rawName}</span>
+      ${op ? '<span title="Operator" style="font-size:11px;color:var(--accent);background:var(--accent-soft);border:1px solid color-mix(in oklab,var(--accent) 25%,transparent);border-radius:5px;padding:1px 6px;font-weight:600">OP</span>' : ''}
+    </div>
+    <button class="more-btn" aria-haspopup="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+    </button>`;
+    row.querySelector('img').src = avatarSrc(player);
+    return row;
+  }
+  function closeDropdown() { dropdown.classList.remove('show'); dropdown.setAttribute('aria-hidden', 'true'); currentPlayer = null; currentAnchor = null; }
+  function buildDropdown() {
+    dropdown.innerHTML = ['kick','ban','op','kill','pardon','deop'].map(act =>
+      `<button class="menu-item" data-act="${act}">${act.charAt(0).toUpperCase()+act.slice(1)}</button>`
+    ).join('');
+  }
+  function positionDropdown(btn) {
+    dropdown.style.visibility = 'hidden'; dropdown.classList.add('show');
+    const rect = btn.getBoundingClientRect(); const dw = dropdown.offsetWidth;
+    dropdown.style.left = Math.max(12, rect.right - dw) + 'px';
+    dropdown.style.top  = (rect.bottom + 6) + 'px';
+    dropdown.style.visibility = 'visible';
+  }
+  function sendAction(act, player, extra) {
+    fetch('/' + act, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ player }, extra || {})) })
+      .then(r => r.json()).then(() => toast('Action', act + ' sent', 'ok')).catch(() => toast('Action', 'Failed', 'err'));
   }
 
-  stopBtn.onclick=()=>{
-    awaitingExit=true
-    fetch('/stop').then(r=>r.json()).then(j=>{toast('Stopping',j.message||'Stopping server','ok')}).catch(()=>toast('Error','Failed to stop','err'))
-    stopWatching()
-    startModal.style.display='none'
+  playersEl.addEventListener('click', e => {
+    const btn = e.target.closest('.more-btn'); if (!btn) return;
+    const row = btn.closest('.player');
+    const name = row.querySelector('.pname').textContent.replace(/…$/, '');
+    if (currentPlayer === name && dropdown.classList.contains('show')) { closeDropdown(); return; }
+    currentPlayer = name; currentAnchor = btn; buildDropdown(); positionDropdown(btn);
+    dropdown.setAttribute('aria-hidden', 'false');
+  });
+  dropdown.addEventListener('click', e => {
+    const item = e.target.closest('.menu-item'); if (!item || !currentPlayer) return;
+    const act = item.dataset.act;
+    if (act === 'kick')   sendAction('kick',   currentPlayer, { reason: 'Kicked by Admin' });
+    else if (act === 'ban')    sendAction('ban',    currentPlayer, { reason: 'Banned by Admin' });
+    else if (act === 'op')     sendAction('op',     currentPlayer);
+    else if (act === 'kill')   sendAction('kill',   currentPlayer);
+    else if (act === 'pardon') sendAction('pardon', currentPlayer);
+    else if (act === 'deop')   sendAction('deop',   currentPlayer);
+    closeDropdown();
+  });
+  document.addEventListener('click', e => {
+    if (dropdown.classList.contains('show') && !e.target.closest('#player-dropdown') && e.target.closest('.more-btn') !== currentAnchor) closeDropdown();
+  });
+  window.addEventListener('resize', closeDropdown);
+
+  function updatePlayers() {
+    fetch('/get-players').then(r => r.json()).then(list => {
+      playersEl.innerHTML = '';
+      list.forEach(p => playersEl.appendChild(renderPlayerRow(p)));
+      playersEmpty.style.display = list.length ? 'none' : 'flex';
+      const max = serverMaxPlayers ? ' / ' + serverMaxPlayers : '';
+      playersChip.textContent = list.length + max;
+      document.getElementById('metric-players').textContent = list.length;
+      if (serverMaxPlayers) {
+        document.getElementById('metric-players-max').textContent = '/ ' + serverMaxPlayers + ' slots';
+        const pct = Math.round((list.length / serverMaxPlayers) * 100);
+        document.getElementById('metric-players-bar').style.width = pct + '%';
+        document.getElementById('metric-players-pct').textContent = pct + '%';
+      }
+      const names = list.map(x => typeof x === 'string' ? x : (x && x.name ? x.name : ''));
+      if (currentPlayer && !names.includes(currentPlayer)) closeDropdown();
+    }).catch(() => {});
   }
 
-  function onSocketDrop(){}
+  function motdToHtml(raw) {
+    if (!raw) return '';
+    let s = String(raw).replace(/\\u00A7/gi, '§').replace(/\\n/g, '\n');
+    s = s.replace(/[§&]x([§&][0-9a-fA-F]){6}/g, m => {
+      const h = m.replace(/[§&]x/gi, '').replace(/[§&]/g, '').toLowerCase();
+      return '§#' + h;
+    });
+    s = s.replace(/&#([0-9a-fA-F]{6})/g, '§#$1');
+    const map = {'0':'#000000','1':'#0000aa','2':'#00aa00','3':'#00aaaa','4':'#aa0000','5':'#aa00aa','6':'#ffaa00','7':'#aaaaaa','8':'#555555','9':'#5555ff','a':'#55ff55','b':'#55ffff','c':'#ff5555','d':'#ff55ff','e':'#ffff55','f':'#ffffff'};
+    let i = 0, buf = '', color = null, bold = false, italic = false, under = false, strike = false;
+    const out = [];
+    const esc = v => v.replace(/[<>&]/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[ch]));
+    function flush() {
+      if (!buf) return;
+      let st = '';
+      if (color) st += 'color:' + color + ';';
+      if (bold) st += 'font-weight:700;';
+      if (italic) st += 'font-style:italic;';
+      const dec = [];
+      if (under) dec.push('underline');
+      if (strike) dec.push('line-through');
+      if (dec.length) st += 'text-decoration:' + dec.join(' ') + ';';
+      out.push('<span' + (st ? ' style="' + st + '"' : '') + '>' + esc(buf) + '</span>');
+      buf = '';
+    }
+    while (i < s.length) {
+      const ch = s[i];
+      if ((ch === '§' || ch === '&') && i + 1 < s.length) {
+        const code = s[i + 1].toLowerCase();
+        if (code === '#') {
+          const hex = s.slice(i + 2, i + 8);
+          if (/^[0-9a-fA-F]{6}$/.test(hex)) { flush(); color = '#' + hex; i += 8; continue; }
+        }
+        if (Object.prototype.hasOwnProperty.call(map, code)) { flush(); color = map[code]; i += 2; continue; }
+        if (code === 'r') { flush(); color = null; bold = false; italic = false; under = false; strike = false; i += 2; continue; }
+        if (code === 'l') { flush(); bold = true; i += 2; continue; }
+        if (code === 'o') { flush(); italic = true; i += 2; continue; }
+        if (code === 'n') { flush(); under = true; i += 2; continue; }
+        if (code === 'm') { flush(); strike = true; i += 2; continue; }
+        if (code === 'k') { i += 2; continue; }
+      }
+      buf += ch; i++;
+    }
+    flush();
+    return out.join('').replace(/\n/g, '<br>');
+  }
 
-  setInterval(fetchConsole,300)
-  setInterval(updateStatus,800)
-  setInterval(updatePlayers,1000)
-  setInterval(fetchServerInfo,10000)
-  setInterval(refreshOps,5000)
+  /* ---- server info ---- */
+  function fetchServerInfo() {
+    fetch('/server-info').then(r => r.json()).then(info => {
+      const set = (el, v) => { if (el) el.textContent = v ?? '—'; };
+      set(els.version, info.mc_version || '—');
+      set(els.java,    info.java_version || '—');
+      set(els.uptime,  info.uptime_human || '—');
+      set(els.port,    info.port || '—');
+      if (info.online_mode === true)  els.online.innerHTML = '<span class="toggle-true">true</span>';
+      else if (info.online_mode === false) els.online.textContent = 'false';
+      else els.online.textContent = '—';
 
-  updateStatus()
-  updatePlayers()
-  fetchConsole()
-  fetchServerInfo()
-  refreshOps()
-})
+      // Mods / Plugins counts
+      const fmtPkg = (total, enabled) => total === 0 ? `0` : total === enabled ? `${total}` : `${enabled} / ${total} enabled`;
+      const rowMods = document.getElementById('info-row-mods');
+      const rowPlugins = document.getElementById('info-row-plugins');
+      if (info.mods_total != null && rowMods) {
+        rowMods.style.display = '';
+        set(els.mods, fmtPkg(info.mods_total, info.mods_enabled));
+      }
+      if (info.plugins_total != null && rowPlugins) {
+        rowPlugins.style.display = '';
+        set(els.plugins, fmtPkg(info.plugins_total, info.plugins_enabled));
+      }
+
+      // Public IP with copy
+      const pubEl = els.public; const pubIP = info.public_ip || '—';
+      pubEl.innerHTML = pubIP + (pubIP !== '—' ? ' <span class="copy-icon" title="Copy">⧉</span>' : '');
+      pubEl.querySelector('.copy-icon')?.addEventListener('click', () => navigator.clipboard?.writeText(pubIP));
+
+      // Local IP with copy
+      const locEl = els.local; const locIP = info.local_ip || '—';
+      locEl.innerHTML = locIP + (locIP !== '—' ? ' <span class="copy-icon" title="Copy">⧉</span>' : '');
+      locEl.querySelector('.copy-icon')?.addEventListener('click', () => navigator.clipboard?.writeText(locIP));
+
+      // MOTD with seamless marquee when too wide to fit
+      const motdRaw = info.motd || '—';
+      const motdHtml = motdToHtml(motdRaw);
+      if (motdHtml !== lastMotdHtml) {
+        lastMotdHtml = motdHtml;
+        const motdEl = els.motd;
+        const track = document.createElement('span');
+        track.className = 'motd-track';
+        track.innerHTML = motdHtml + '<span style="padding:0 28px"></span>' + motdHtml + '<span style="padding:0 28px"></span>';
+        motdEl.innerHTML = '';
+        motdEl.appendChild(track);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const half = Math.round(track.scrollWidth / 2);
+          if (half > motdEl.clientWidth) {
+            track.style.setProperty('--motd-shift', `-${half}px`);
+            track.style.animationDuration = Math.max(4, half / 45) + 's';
+            track.classList.add('scrolling');
+          } else {
+            motdEl.innerHTML = motdHtml;
+          }
+        }));
+      }
+
+      // hero lede — strip formatting codes, truncate with ellipsis if too long
+      const parts = [];
+      if (info.mc_version) parts.push(info.mc_version);
+      if (info.uptime_human) parts.push('up ' + info.uptime_human);
+      if (parts.length) {
+        const rawMotd = info.motd || 'server';
+        const plainMotd = String(rawMotd)
+          .replace(/\\u00A7/gi, '§')
+          .replace(/[§&]x([§&][0-9a-fA-F]){6}/g, '')
+          .replace(/[§&]#[0-9a-fA-F]{6}/g, '')
+          .replace(/[§&][0-9a-fk-or]/gi, '')
+          .replace(/\\n/g, ' ')
+          .trim();
+        const esc = s => s.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const label = plainMotd.length > 30 ? plainMotd.slice(0, 29) + '…' : plainMotd;
+        document.getElementById('hero-lede').innerHTML =
+          'Running <strong title="' + esc(plainMotd) + '">' + esc(label) + '</strong> · ' + parts.join(' · ');
+      }
+
+      if (info.max_players) serverMaxPlayers = info.max_players;
+    }).catch(() => {});
+  }
+
+  /* ---- system metrics ---- */
+  function pollSystem() {
+    fetch('/system/metrics').then(r => r.json()).then(m => {
+      const cpuPct = document.getElementById('cpu-pct');
+      const cpuBar = document.getElementById('cpu-bar');
+      const memPct = document.getElementById('mem-pct');
+      const memBar = document.getElementById('mem-bar');
+      const load   = document.getElementById('loadavg');
+      const memDet = document.getElementById('mem-detail');
+
+      setBar(cpuPct, cpuBar, m.cpu_percent);
+      if (m.loadavg && typeof m.loadavg === 'object') {
+        const la = m.loadavg;
+        load.textContent = [la['1m'], la['5m'], la['15m']].map(x => Number(x).toFixed(2)).join(' / ');
+      }
+      const mem = m.memory || {};
+      const used = typeof mem.used === 'number' ? mem.used : ((typeof mem.total === 'number' && typeof mem.available === 'number') ? mem.total - mem.available : null);
+      const mpct = typeof mem.percent === 'number' ? mem.percent : (mem.total && used != null ? 100 * used / mem.total : null);
+      setBar(memPct, memBar, mpct);
+      memDet.textContent = (used != null && mem.total != null) ? humanBytes(used) + ' / ' + humanBytes(mem.total) : '—';
+
+      const storagePct = document.getElementById('storage-pct');
+      const storageBar = document.getElementById('storage-bar');
+      const storageDet = document.getElementById('storage-detail');
+      if (m.disks) {
+        const root = m.disks['/'] || m.disks[Object.keys(m.disks).find(k => k === '/')] || null;
+        if (root) { setBar(storagePct, storageBar, root.percent); storageDet.textContent = root.used != null && root.total != null ? humanBytes(root.used) + ' / ' + humanBytes(root.total) : '—'; }
+      }
+    }).catch(() => {});
+  }
+
+  /* ---- intervals ---- */
+  setInterval(fetchConsole,   300);
+  setInterval(updateStatus,   800);
+  setInterval(updatePlayers, 1000);
+  setInterval(fetchServerInfo, 10000);
+  setInterval(refreshOps, 5000);
+  setInterval(pollSystem, 2500);
+
+  updateStatus(); updatePlayers(); fetchConsole(); fetchServerInfo(); refreshOps(); pollSystem();
+});
 </script>
 {% endblock %}

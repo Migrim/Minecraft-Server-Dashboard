@@ -9,7 +9,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
 <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <style>
-:root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:#4f46e5;--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22}
+{% set accent = panel_accent_color|default('#c2553d') %}
+{% set accent_fg = panel_accent_fg|default('#fff8f3') %}
+:root{--bg:#0a0a0a;--card:#0f0f10;--muted:#a1a1aa;--text:#fff;--accent:{{ accent }};--accent-hover:color-mix(in oklab, {{ accent }} 88%, #fff);--accent-soft:color-mix(in oklab, {{ accent }} 20%, var(--card));--accent-ink:color-mix(in oklab, {{ accent }} 68%, #fff);--accent-fg-on:{{ accent_fg }};--accent-2:#22c55e;--red:#ef4444;--border:#1f1f22}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:#0a0a0a;color:var(--text);font-family:Roboto,system-ui,Segoe UI,Arial,sans-serif}
@@ -65,17 +67,20 @@ body{margin:0;background:#0a0a0a;color:var(--text);font-family:Roboto,system-ui,
       </div>
       <a href="{{ url_for('dashboard') }}" class="brand">Minecraft Server</a>
     </div>
-    <nav class="nav">
+    <nav class="nav" id="main-nav">
       <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint=='dashboard' %}active{% endif %}">Dashboard</a>
       <a href="{{ url_for('files') }}" class="{% if request.endpoint=='files' %}active{% endif %}">Files</a>
       <a href="{{ url_for('settings') }}" class="{% if request.endpoint=='settings' %}active{% endif %}">Server Settings</a>
       {% if has_mods %}
-        <a href="{{ url_for('mods_page') }}" class="{% if request.endpoint=='mods_page' %}active{% endif %}">Mods</a>
+        <a href="{{ url_for('mods_page') }}" data-feature="mods" class="{% if request.endpoint=='mods_page' %}active{% endif %}">Mods</a>
       {% endif %}
       {% if has_plugins %}
-        <a href="{{ url_for('plugins_page') }}" class="{% if request.endpoint=='plugins_page' %}active{% endif %}">Plugins</a>
+        <a href="{{ url_for('plugins_page') }}" data-feature="plugins" class="{% if request.endpoint=='plugins_page' %}active{% endif %}">Plugins</a>
       {% endif %}
-      <a href="{{ url_for('panel_settings') }}" class="{% if request.endpoint=='panel_settings' %}active{% endif %}">Panel Settings</a>
+      {% if has_bluemap %}
+        <a href="{{ url_for('map_page') }}" data-feature="bluemap" class="{% if request.endpoint=='map_page' %}active{% endif %}">Map</a>
+      {% endif %}
+      <a href="{{ url_for('panel_settings') }}" id="nav-panel-settings" class="{% if request.endpoint=='panel_settings' %}active{% endif %}">Panel Settings</a>
       <a href="{{ url_for('logout') }}" class="{% if request.endpoint=='logout' %}active{% endif %}">Logout</a>
     </nav>
   </div>
@@ -250,6 +255,47 @@ keepAspectEl.addEventListener('change',e=>{
     setTransform()
   }
 })
+
+/* ── live nav feature-folder check ── */
+;(function(){
+  const NAV_ITEMS = {
+    mods:    { href: '/mods',    label: 'Mods',    endpoint: 'mods_page'    },
+    plugins: { href: '/plugins', label: 'Plugins', endpoint: 'plugins_page' },
+    bluemap: { href: '/map',     label: 'Map',     endpoint: 'map_page'     },
+  }
+  const mainNav  = document.getElementById('main-nav')
+  const anchor   = document.getElementById('nav-panel-settings')
+  const curPath  = window.location.pathname
+
+  function ensureLink(key, present) {
+    const existing = mainNav.querySelector('[data-feature="'+key+'"]')
+    if (present && !existing) {
+      const { href, label } = NAV_ITEMS[key]
+      const a = document.createElement('a')
+      a.href = href
+      a.dataset.feature = key
+      a.textContent = label
+      if (curPath === href || curPath.startsWith(href+'/')) a.classList.add('active')
+      mainNav.insertBefore(a, anchor)
+    } else if (!present && existing) {
+      existing.remove()
+    }
+  }
+
+  async function pollFeatureFlags() {
+    try {
+      const r = await fetch('/feature-flags', {headers:{'Accept':'application/json'}})
+      if (!r.ok) return
+      const j = await r.json()
+      ensureLink('mods',    j.has_mods)
+      ensureLink('plugins', j.has_plugins)
+      ensureLink('bluemap', j.has_bluemap)
+    } catch(_) {}
+  }
+
+  pollFeatureFlags()
+  setInterval(pollFeatureFlags, 4000)
+})()
 </script>
 {% block scripts %}{% endblock %}
 </body>

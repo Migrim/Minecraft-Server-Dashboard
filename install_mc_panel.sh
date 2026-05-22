@@ -2,6 +2,17 @@
 set -euo pipefail
 trap 'ec=$?; echo "ERROR $ec on line $LINENO"; exit $ec' ERR
 
+cat <<'LOGO'
+
+.        :     .,~:::::     ::::::::::.                          `::.
+;;,.    ;;;  ,;;;'````'      `;;;```.;;;                          ;;;
+[[[[, ,[[[[, [[[              `]]nnn]]',ccc,   [ccccc,  ,cc[[[cc. [[[
+$$$$$$$$"$$$ $$$               $$$""  $$$cc$$$ $$$$"$$$ $$$___--' $$'
+888 Y88" 888o`88bo,__,o,       888o   888   888888  Y88o88b    ,o,\8o
+MMM  M'  "MMM  "YUMMMMMP"      YMMMb   "YUM" MPMMM  "MMM "YUMMMMP" MM;
+
+LOGO
+
 DOMAIN="${DOMAIN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 APP_DIR="$(readlink -f "${APP_DIR:-$PWD}")"
@@ -9,12 +20,23 @@ APP_PORT="${APP_PORT:-5003}"
 MC_PORT="${MC_PORT:-25565}"
 WANT_NGINX_STREAM="${WANT_NGINX_STREAM:-0}"
 MC_BACKEND_PORT="${MC_BACKEND_PORT:-25566}"
+JAVA_VERSION="${JAVA_VERSION:-21}"
 
 if [ "$(id -u)" -ne 0 ]; then echo "run as root"; exit 1; fi
 if ! command -v apt >/dev/null 2>&1; then echo "Debian/Ubuntu required"; exit 1; fi
 
 apt update
-DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip nginx-full ufw rsync curl git
+DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip nginx-full ufw rsync curl git wget
+
+# Install Java (required to run the Minecraft server)
+if command -v java >/dev/null 2>&1; then
+  echo "Java already installed: $(java -version 2>&1 | head -1)"
+else
+  DEBIAN_FRONTEND=noninteractive apt install -y "openjdk-${JAVA_VERSION}-jre-headless" 2>/dev/null \
+    || DEBIAN_FRONTEND=noninteractive apt install -y default-jre-headless
+  echo "Java installed: $(java -version 2>&1 | head -1)"
+fi
+
 if [ -n "$DOMAIN" ]; then DEBIAN_FRONTEND=noninteractive apt install -y certbot python3-certbot-nginx || true; fi
 
 mkdir -p "$APP_DIR/instance/server" "$APP_DIR/uploads" "$APP_DIR/server-files"
@@ -134,6 +156,7 @@ LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 PUBL_IP=$(curl -fsS https://api.ipify.org || true)
 echo "Install dir: $APP_DIR"
 echo "Legacy path: /opt/mc-panel -> $APP_DIR"
+echo "Java: $(java -version 2>&1 | head -1)"
 echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
 [ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"
 echo "Minecraft address: ${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$MC_PORT"

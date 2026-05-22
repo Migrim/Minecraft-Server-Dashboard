@@ -1,0 +1,101 @@
+{% extends "base_app.html" %}
+
+{% block title %}Minecraft Server · Map{% endblock %}
+{% block brand_sub %}<span class="brand-sub">Map</span>{% endblock %}
+
+{% block head_extra %}
+<style>
+  .map-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .map-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    border: none;
+    display: block;
+  }
+  .map-error {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex: 1;
+    color: var(--text-3);
+    text-align: center;
+    padding: 48px 24px;
+  }
+  .map-error svg { width: 40px; height: 40px; opacity: .35; }
+  .map-error p { margin: 0; font-size: 14px; line-height: 1.6; }
+  .map-error strong { color: var(--text-2); }
+  .map-error code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 7px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="map-wrap">
+  <iframe
+    id="bluemap-frame"
+    class="map-frame"
+    src=""
+    allowfullscreen
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+    title="BlueMap"
+  ></iframe>
+  <div class="map-error" id="map-error">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <p>
+      <strong>BlueMap is not reachable.</strong><br>
+      Make sure the BlueMap web server is running on port <code id="bm-port">8100</code>.<br>
+      Check your BlueMap config at <code>bluemap/webserver.conf</code>.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const port = {{ bluemap_port | tojson }};
+  const url  = window.location.protocol + '//' + window.location.hostname + ':' + port;
+  const frame = document.getElementById('bluemap-frame');
+  const err   = document.getElementById('map-error');
+  document.getElementById('bm-port').textContent = port;
+
+  frame.src = url;
+
+  frame.addEventListener('error', () => {
+    frame.style.display = 'none';
+    err.style.display   = 'flex';
+  });
+
+  frame.addEventListener('load', () => {
+    try {
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      if (!doc || doc.title === '404' || doc.body.textContent.trim() === '') {
+        throw new Error('empty');
+      }
+      frame.style.display = 'block';
+      err.style.display   = 'none';
+    } catch (_) {
+      /* cross-origin load succeeded — BlueMap is up */
+      frame.style.display = 'block';
+      err.style.display   = 'none';
+    }
+  });
+})();
+</script>
+{% endblock %}

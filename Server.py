@@ -10,13 +10,15 @@ import socket
 import json
 import datetime
 import ipaddress
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import base64, hashlib, hmac, sqlite3
 import shutil
 import zipfile, tempfile
+import struct
 
 from io import BytesIO
 try:
@@ -49,6 +51,7 @@ HASH_METHOD = os.environ.get('HASH_METHOD', 'pbkdf2:sha256')
 DB_PATH = os.path.join(app.instance_path, 'users.db')
 app.config.setdefault('BOOTSTRAPPED', False)
 playtime_store = {}
+player_join_times = {}  # username -> join timestamp (float)
 
 PANEL_DEFAULTS = {
     'auto_restart': True,
@@ -60,7 +63,27 @@ PANEL_DEFAULTS = {
     'scheduled_restart_enabled': False,
     'scheduled_restart_time': '04:30',
     'backup_on_restart': False,
-    'backup_keep': 5
+    'backup_keep': 5,
+    'accent_color': '#c2553d',
+    'accent_text_mode': 'auto',
+    'discord_server_name': '',
+    'discord_webhook_enabled': False,
+    'discord_webhook_url': '',
+    'discord_notify_start': True,
+    'discord_notify_stop': True,
+    'discord_notify_restart': True,
+    'discord_notify_crash': True,
+    'discord_player_webhook_enabled': False,
+    'discord_player_webhook_url': '',
+    'discord_notify_join': True,
+    'discord_notify_leave': True,
+    'discord_notify_playtime': True,
+    'discord_notify_achievement': True,
+    'discord_notify_death': True,
+    'discord_notify_first_join': True,
+    'discord_chat_webhook_enabled': False,
+    'discord_chat_webhook_url': '',
+    'bluemap_port': 8100,
 }
 
 BOOL_KEYS = {
@@ -78,6 +101,8 @@ SELECT_OPTIONS = {
 }
 
 panel_restart_lock = threading.Lock()
+restore_jobs = {}
+restore_jobs_lock = threading.Lock()
 last_schedule_mark = None
 
 console_output = []
@@ -176,11 +201,29 @@ def reset_admin_if_env():
 def _feature_folder_exists(kind: str) -> bool:
     return os.path.isdir(os.path.join(server_files_dir, kind))
 
+def _has_bluemap() -> bool:
+    if os.path.isdir(os.path.join(server_files_dir, 'bluemap')):
+        return True
+    for folder in ('plugins', 'mods'):
+        d = os.path.join(server_files_dir, folder)
+        if os.path.isdir(d):
+            for name in os.listdir(d):
+                if name.lower().startswith('bluemap') and name.lower().endswith('.jar'):
+                    return True
+    return False
+
 @app.context_processor
 def inject_feature_flags():
+    panel = get_panel_settings()
+    accent_color = _clean_hex_color(panel.get('accent_color', '#c2553d'))
+    accent_text_mode = _clean_accent_text_mode(panel.get('accent_text_mode', 'auto'))
     return {
         'has_plugins': _feature_folder_exists('plugins'),
         'has_mods': _feature_folder_exists('mods'),
+        'has_bluemap': _has_bluemap(),
+        'panel_settings': panel,
+        'panel_accent_color': accent_color,
+        'panel_accent_fg': _accent_foreground(accent_color, accent_text_mode),
     }
 
 @app.before_request
@@ -189,7 +232,7 @@ def ensure_jar_present():
     if os.path.isfile(jar_path) or os.path.isfile(run_script_path):
         return
     allowed_eps = {
-        'install','upload_jar','static','jar_status','server_info',
+        'install','upload_jar','upload_forge_folder','static','jar_status','server_info',
         'files','fs_tree','fs_open','fs_save','fs_download',
         'login','logout','change_password'
     }
@@ -205,7 +248,7 @@ def require_login():
     ep = request.endpoint or ''
     p = request.path or ''
     public_eps = {
-        'login','logout','change_password','static','install','upload_jar','jar_status','server_info'
+        'login','logout','change_password','static','install','upload_jar','upload_forge_folder','jar_status','server_info'
     }
     if p.startswith('/static/'):
         return
@@ -268,6 +311,13 @@ def plugins_page():
     _require_feature_folder('plugins')
     return render_template('plugins.html')
 
+@app.route('/map')
+def map_page():
+    if not _has_bluemap():
+        abort(404)
+    bluemap_port = int(get_panel_settings().get('bluemap_port', 8100))
+    return render_template('map.html', bluemap_port=bluemap_port)
+
 @app.route('/panel-settings-data')
 def panel_settings_data():
     return jsonify(get_panel_settings())
@@ -278,7 +328,7 @@ def panel_settings_save():
     save_panel_settings(data)
     return jsonify({'ok': True})
 
-def stop_server_blocking(timeout=90):
+def stop_server_blocking(timeout=90, announce=None, countdown_label='Stopping server in', countdown_from=3, lead_delay=7):
     global server_process
     _write_state(phase='stopping')
     _append_console("[panel] restart: stop begin")
@@ -289,11 +339,12 @@ def stop_server_blocking(timeout=90):
         return True
     try:
         try:
-            server_process.stdin.write('/say The server will shutdown in 10 seconds\n')
+            msg = announce or 'The server will shutdown in 10 seconds'
+            server_process.stdin.write(f'/say {msg}\n')
             server_process.stdin.flush()
-            time.sleep(7)
-            for remaining in range(3, 0, -1):
-                server_process.stdin.write(f'/say Stopping server in {remaining} \n')
+            time.sleep(max(0, lead_delay))
+            for remaining in range(int(countdown_from), 0, -1):
+                server_process.stdin.write(f'/say {countdown_label} {remaining}\n')
                 server_process.stdin.flush()
                 time.sleep(1)
             server_process.stdin.write('stop\n')
@@ -364,16 +415,48 @@ def get_panel_settings():
     for r in rows:
         k = r['key']
         v = r['val']
-        if k in {'auto_restart','auto_start_on_boot','scheduled_restart_enabled','backup_on_restart'}:
+        if k in {'auto_restart','auto_start_on_boot','scheduled_restart_enabled','backup_on_restart',
+                  'discord_webhook_enabled','discord_notify_start','discord_notify_stop',
+                  'discord_notify_restart','discord_notify_crash','discord_player_webhook_enabled',
+                  'discord_notify_join','discord_notify_leave','discord_notify_playtime',
+                  'discord_notify_achievement','discord_notify_death','discord_notify_first_join','discord_chat_webhook_enabled'}:
             out[k] = (v == '1')
         elif k in {'restart_delay_sec','min_ram_mb','max_ram_mb','backup_keep'}:
             try:
                 out[k] = int(v)
             except Exception:
                 pass
+        elif k == 'accent_color':
+            out[k] = _clean_hex_color(v)
+        elif k == 'accent_text_mode':
+            out[k] = _clean_accent_text_mode(v)
         else:
             out[k] = v
     return out
+
+def _clean_hex_color(value, fallback='#c2553d'):
+    if not isinstance(value, str):
+        return fallback
+    value = value.strip()
+    if re.fullmatch(r'#[0-9a-fA-F]{6}', value):
+        return value.lower()
+    return fallback
+
+def _clean_accent_text_mode(value):
+    return value if value in {'auto', 'white', 'dark'} else 'auto'
+
+def _accent_foreground(hex_color, mode='auto'):
+    mode = _clean_accent_text_mode(mode)
+    if mode == 'white':
+        return '#fff8f3'
+    if mode == 'dark':
+        return '#2a221a'
+    color = _clean_hex_color(hex_color).lstrip('#')
+    r = int(color[0:2], 16)
+    g = int(color[2:4], 16)
+    b = int(color[4:6], 16)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return '#2a221a' if luminance > 0.62 else '#fff8f3'
 
 def save_panel_settings(updates: dict):
     if not updates:
@@ -381,8 +464,16 @@ def save_panel_settings(updates: dict):
     db = get_db()
     db.execute('CREATE TABLE IF NOT EXISTS panel_settings (key TEXT PRIMARY KEY, val TEXT NOT NULL)')
     for k, v in updates.items():
-        if k in {'auto_restart','auto_start_on_boot','scheduled_restart_enabled','backup_on_restart'}:
+        if k in {'auto_restart','auto_start_on_boot','scheduled_restart_enabled','backup_on_restart',
+                  'discord_webhook_enabled','discord_notify_start','discord_notify_stop',
+                  'discord_notify_restart','discord_notify_crash','discord_player_webhook_enabled',
+                  'discord_notify_join','discord_notify_leave','discord_notify_playtime',
+                  'discord_notify_achievement','discord_notify_death','discord_notify_first_join','discord_chat_webhook_enabled'}:
             val = '1' if bool(v) else '0'
+        elif k == 'accent_color':
+            val = _clean_hex_color(v)
+        elif k == 'accent_text_mode':
+            val = _clean_accent_text_mode(v)
         else:
             val = str(v)
         db.execute('INSERT INTO panel_settings(key,val) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET val=excluded.val', (k, val))
@@ -442,16 +533,51 @@ def backup_server_folder():
 
     return archive
 
+def stop_server_for_restart(timeout=60):
+    global server_process
+    if server_process is None or not server_process.stdin:
+        save_server_status(False)
+        server_process = None
+        return
+    try:
+        for remaining in range(5, 0, -1):
+            server_process.stdin.write(f'/say rebooting in {remaining}\n')
+            server_process.stdin.flush()
+            time.sleep(1)
+        server_process.stdin.write('stop\n')
+        server_process.stdin.flush()
+        server_process.wait(timeout=timeout)
+    except Exception:
+        try:
+            if server_process and server_process.poll() is None:
+                server_process.terminate()
+                server_process.wait(timeout=10)
+        except Exception:
+            try:
+                if server_process and server_process.poll() is None:
+                    server_process.kill()
+            except Exception:
+                pass
+    finally:
+        save_server_status(False)
+        _write_state(phase='stopped')
+        server_process = None
+
 def graceful_restart_with_options(do_backup=False):
+    _append_console("[panel] restart: begin")
+    _write_state(phase='restarting')
+    _fire_webhook_async('restarting')
     if do_backup:
         try:
             backup_server_folder()
         except Exception:
             pass
-    stop_server_async()
+    stop_server_for_restart()
     t0 = time.time()
     while is_process_alive() and time.time() - t0 < 60:
         time.sleep(0.5)
+    _write_state(phase='starting')
+    _append_console("[panel] restart: starting")
     start_server()
 
 def watchdog_loop():
@@ -466,6 +592,7 @@ def watchdog_loop():
                         d = int(s.get('restart_delay_sec', 10))
                         time.sleep(max(0, d))
                         if read_server_status() and not is_process_alive():
+                            _fire_webhook_async('crashed')
                             _write_state(phase='starting')
                             start_server()
                 time.sleep(2)
@@ -485,8 +612,7 @@ def schedule_loop():
                         mark = now.strftime('%Y-%m-%d %H:%M')
                         if last_schedule_mark != mark:
                             last_schedule_mark = mark
-                            with panel_restart_lock:
-                                graceful_restart_with_options(bool(s.get('backup_on_restart', False)))
+                            graceful_restart_with_options(bool(s.get('backup_on_restart', False)))
                 time.sleep(20)
             except Exception:
                 time.sleep(5)
@@ -585,6 +711,23 @@ def restore_backup_archive(archive_path):
         except Exception:
             pass
 
+def wait_for_server_started(timeout=180):
+    props_path = os.path.join(server_files_dir, 'server.properties')
+    props = read_properties(props_path)
+    try:
+        port = int(props.get('server-port', '25565'))
+    except Exception:
+        port = 25565
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if is_process_alive() and is_port_open(port=port):
+            _write_state(phase='running', server_running=True)
+            return True
+        if server_process is not None and server_process.poll() is not None:
+            break
+        time.sleep(0.5)
+    return False
+
 @app.route('/backup-restore', methods=['POST'])
 def backup_restore():
     data = request.get_json(force=True) or {}
@@ -595,30 +738,73 @@ def backup_restore():
     fp = os.path.join(bdir, name)
     if not os.path.isfile(fp):
         return jsonify({'ok': False, 'error': 'not found'}), 404
+    job_id = uuid.uuid4().hex
+    def set_restore_status(step, error=None):
+        payload = {'step': step, 'updated_at': time.time()}
+        if error:
+            payload['error'] = str(error)
+        with restore_jobs_lock:
+            restore_jobs[job_id] = payload
+            if len(restore_jobs) > 25:
+                stale = sorted(restore_jobs.items(), key=lambda item: item[1].get('updated_at', 0))[:-25]
+                for old_id, _ in stale:
+                    restore_jobs.pop(old_id, None)
+        socketio.emit('restore_progress', payload)
+
+    with restore_jobs_lock:
+        restore_jobs[job_id] = {'step': 'queued', 'updated_at': time.time()}
+
     def do_restore(path):
+        locked = False
         try:
-            socketio.emit('restore_progress', {'step': 'locking'})
-            with panel_restart_lock:
-                set_lock(True)
-                _write_state(phase='restoring', server_running=False)
-                socketio.emit('restore_progress', {'step': 'stopping'})
-                stop_server_blocking(timeout=90)
-                save_server_status(False)
-                socketio.emit('restore_progress', {'step': 'replacing'})
-                restore_backup_archive(path)
-                _write_state(phase='stopped', server_running=False)
-                socketio.emit('restore_progress', {'step': 'unlocking'})
-                set_lock(False)
-            socketio.emit('restore_progress', {'step': 'done'})
+            set_restore_status('locking')
+            locked = panel_restart_lock.acquire(timeout=5)
+            if not locked:
+                raise RuntimeError('Another panel operation is running. Try again after it finishes.')
+            set_lock(True)
+            _write_state(phase='restoring', server_running=False)
+            set_restore_status('stopping')
+            _append_console("[panel] restore: warning players before stop")
+            stop_server_blocking(
+                timeout=90,
+                announce='Backup restore starting. Server will stop in 10 seconds',
+                countdown_label='Loading backup in',
+                countdown_from=5,
+                lead_delay=5,
+            )
+            save_server_status(False)
+            set_restore_status('replacing')
+            restore_backup_archive(path)
+            _write_state(phase='stopped', server_running=False)
+            set_restore_status('unlocking')
+            set_lock(False)
+            set_restore_status('starting')
+            _append_console("[panel] restore: starting server")
+            start_server()
+            if not wait_for_server_started(timeout=180):
+                raise RuntimeError('Backup restored, but server did not finish starting.')
+            set_restore_status('done')
         except Exception as e:
             try:
                 set_lock(False)
             except Exception:
                 pass
-            socketio.emit('restore_progress', {'step': 'error', 'error': str(e)})
+            set_restore_status('error', e)
+        finally:
+            if locked:
+                panel_restart_lock.release()
     t = threading.Thread(target=do_restore, args=(fp,), daemon=True)
     t.start()
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'job_id': job_id})
+
+@app.route('/backup-restore-status')
+def backup_restore_status():
+    job_id = (request.args.get('id') or '').strip()
+    with restore_jobs_lock:
+        status = restore_jobs.get(job_id)
+    if not status:
+        return jsonify({'ok': False, 'error': 'restore job not found'}), 404
+    return jsonify({'ok': True, **status})
 
 @app.route('/backup-download')
 def backup_download():
@@ -703,6 +889,90 @@ def upload_jar():
         os.remove(final_path)
     os.replace(tmp, final_path)
     return jsonify({'ok': True, 'path': final_path})
+
+@app.route('/upload-forge-folder', methods=['POST'])
+def upload_forge_folder():
+    os.makedirs(server_files_dir, exist_ok=True)
+    base = os.path.abspath(server_files_dir)
+
+    def safe_dest(rel_path):
+        parts = [p for p in rel_path.replace('\\', '/').split('/') if p and p not in ('.', '..')]
+        if not parts:
+            return None
+        dest = os.path.join(server_files_dir, *parts)
+        if not os.path.abspath(dest).startswith(base):
+            return None
+        return dest
+
+    # ZIP upload
+    if 'zip' in request.files:
+        f = request.files['zip']
+        if not (f.filename or '').lower().endswith('.zip'):
+            return jsonify({'ok': False, 'error': 'Please upload a .zip file'}), 400
+        tmp = os.path.join(app.instance_path, '_forge_upload.zip')
+        try:
+            f.save(tmp)
+            with zipfile.ZipFile(tmp, 'r') as zf:
+                members = [m for m in zf.namelist() if m and not m.startswith('__MACOSX')]
+                tops = set(m.split('/')[0] for m in members)
+                strip = ''
+                if len(tops) == 1:
+                    candidate = list(tops)[0] + '/'
+                    if all(m == candidate.rstrip('/') or m.startswith(candidate) for m in members):
+                        strip = candidate
+                for member in members:
+                    rel = member[len(strip):] if strip and member.startswith(strip) else member
+                    if not rel or rel.endswith('/'):
+                        continue
+                    dest = safe_dest(rel)
+                    if not dest:
+                        continue
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    with zf.open(member) as src, open(dest, 'wb') as dst:
+                        dst.write(src.read())
+        except zipfile.BadZipFile:
+            return jsonify({'ok': False, 'error': 'Invalid ZIP file'}), 400
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+        finally:
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+        return jsonify({'ok': True})
+
+    # Folder files upload (webkitdirectory)
+    files = request.files.getlist('files')
+    if not files:
+        return jsonify({'ok': False, 'error': 'No files received'}), 400
+    saved = 0
+    for f in files:
+        raw = (f.filename or '').replace('\\', '/')
+        parts = [p for p in raw.split('/') if p and p not in ('.', '..')]
+        if len(parts) > 1:
+            parts = parts[1:]  # strip top-level folder name
+        if not parts:
+            continue
+        dest = safe_dest('/'.join(parts))
+        if not dest:
+            continue
+        try:
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            f.save(dest)
+            saved += 1
+        except Exception:
+            pass
+    if not saved:
+        return jsonify({'ok': False, 'error': 'No files could be saved'}), 400
+    return jsonify({'ok': True, 'saved': saved})
+
+@app.route('/feature-flags')
+def feature_flags():
+    return jsonify({
+        'has_mods': _feature_folder_exists('mods'),
+        'has_plugins': _feature_folder_exists('plugins'),
+        'has_bluemap': _has_bluemap(),
+    })
 
 @app.route('/jar-status')
 def jar_status():
@@ -1032,6 +1302,23 @@ def get_mc_version_from_logs():
             return m.group(1)
     return None
 
+def get_forge_info_from_logs():
+    """Return (forge_version, mc_version) if Forge is confirmed running, else (None, None).
+
+    Forge is only considered active when the permission handler init line appears,
+    which is logged after Forge has fully loaded all mods.
+    """
+    lines = [l.replace('ඞ', '') for l in console_output[-500:]]
+    confirmed = any('forge:default_handler' in l for l in lines)
+    if not confirmed:
+        return None, None
+    ver_pattern = re.compile(r"Forge mod loading,\s+version\s+([\d.]+),\s+for MC\s+([\d.]+)", re.I)
+    for line in lines:
+        m = ver_pattern.search(line)
+        if m:
+            return m.group(1), m.group(2)
+    return 'unknown', None
+
 def get_java_version_string():
     try:
         out = subprocess.run([JAVA_CMD, "-version"], capture_output=True, text=True)
@@ -1154,8 +1441,11 @@ def start_server():
                             port = 25565
                         t0 = time.time()
                         while time.time() - t0 < 120:
+                            if _read_state().get('phase') == 'running':
+                                return
                             if not is_process_alive():
-                                _write_state(phase='crashed', server_running=False)
+                                phase = 'stopped' if not read_server_status() else 'crashed'
+                                _write_state(phase=phase, server_running=False)
                                 return
                             if is_port_open(port=port):
                                 _write_state(phase='running', server_running=True)
@@ -1206,8 +1496,11 @@ def start_server():
                         port = 25565
                     t0 = time.time()
                     while time.time() - t0 < 120:
+                        if _read_state().get('phase') == 'running':
+                            return
                         if not is_process_alive():
-                            _write_state(phase='crashed', server_running=False)
+                            phase = 'stopped' if not read_server_status() else 'crashed'
+                            _write_state(phase=phase, server_running=False)
                             return
                         if is_port_open(port=port):
                             _write_state(phase='running', server_running=True)
@@ -1245,33 +1538,129 @@ def stop_server_async():
         except Exception:
             pass
         finally:
+            save_server_status(False)
+            _write_state(phase='stopped')
             server_process = None
+
+def force_stop_server():
+    global server_process
+    proc = server_process
+    save_server_status(False)
+    _write_state(phase='stopping')
+    _append_console("[panel] stop: forced")
+    if proc is not None and proc.poll() is None:
+        try:
+            if proc.stdin:
+                proc.stdin.write('stop\n')
+                proc.stdin.flush()
+            proc.wait(timeout=3)
+        except Exception:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        finally:
+            server_process = None
+    _write_state(phase='stopped')
 
 @app.route('/stop')
 def stop_minecraft_server():
     global server_process
     save_server_status(False)
-    _write_state(phase='stopped')
+    _write_state(phase='stopping')
     if server_process is not None and server_process.stdin:
+        _fire_webhook_async('stopped')
         Thread(target=stop_server_async, daemon=True).start()
         return jsonify({"message": "Minecraft Server shutdown initiated."})
     else:
+        _write_state(phase='stopped')
         return jsonify({"error": "Minecraft Server is not running."}), 400
 
+@app.route('/force-stop', methods=['POST'])
+def force_stop_minecraft_server():
+    _fire_webhook_async('stopped')
+    force_stop_server()
+    return jsonify({"message": "Minecraft Server stopped immediately."})
+
+@app.route('/cancel-start', methods=['POST'])
+def cancel_minecraft_start():
+    global server_process
+    st = _read_state()
+    if st.get('phase') != 'starting':
+        return jsonify({"error": "Minecraft Server is not starting."}), 400
+    proc = server_process
+    save_server_status(False)
+    _write_state(phase='stopping')
+    _append_console("[panel] start: cancelled")
+    if proc is not None and proc.poll() is None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=8)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        finally:
+            server_process = None
+    _write_state(phase='stopped')
+    return jsonify({"message": "Minecraft Server startup cancelled."})
+
 def emit_server_output(process):
-    global console_output, players, server_process, SERVER_START_TS
+    global console_output, players, server_process, SERVER_START_TS, player_join_times
     for line in iter(process.stdout.readline, ''):
         line_display = line.replace('<', 'ඞ').replace('>', 'ඞ')
         _append_console(line_display)
         socketio.emit('server_output', {'data': line_display})
+
         join_match = re.search(r"\[Server thread/INFO\]: (\w+) joined the game", line)
         if join_match:
-            players.add(join_match.group(1))
+            name = join_match.group(1)
+            players.add(name)
+            player_join_times[name] = time.time()
+            _fire_player_webhook_async('join', name)
+            _check_first_join_async(name)
+
         leave_match = re.search(r"\[Server thread/INFO\]: (\w+) left the game", line)
         if leave_match:
-            players.discard(leave_match.group(1))
+            name = leave_match.group(1)
+            players.discard(name)
+            joined_at = player_join_times.pop(name, None)
+            playtime_str = ''
+            if joined_at is not None:
+                secs = int(time.time() - joined_at)
+                h, rem = divmod(secs, 3600)
+                m, s = divmod(rem, 60)
+                playtime_str = (f'{h}h {m}m {s}s' if h else f'{m}m {s}s') if secs >= 60 else f'{secs}s'
+            _fire_player_webhook_async('leave', name, playtime_str)
+
+        adv_match = re.search(r"\[Server thread/INFO\]: (\w+) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]", line)
+        if adv_match:
+            _fire_player_webhook_async('achievement', adv_match.group(1), adv_match.group(2))
+
+        death_match = re.search(
+            r"\[Server thread/INFO\]: (\w+) "
+            r"(?:was |fell |drowned|burned|suffocated|starved|hit the ground|died|blew up|withered|walked into|tried to swim|froze|experienced kinetic|was squished|was pummeled|was shot|was skewered|was fireballed|was killed|was impaled|was struck)",
+            line)
+        if death_match:
+            name = death_match.group(1)
+            raw_msg = re.sub(r'^\[\d+:\d+:\d+\] \[Server thread/INFO\]: ', '', line).strip()
+            _fire_player_webhook_async('death', name, raw_msg)
+
+        chat_match = re.search(r"\[Server thread/INFO\]: <(\w+)> (.+)", line)
+        if chat_match:
+            _fire_chat_webhook_async(chat_match.group(1), chat_match.group(2).strip())
+
         if "Stopping server" in line:
             players.clear()
+            player_join_times.clear()
+        if re.search(r'\[Server thread/INFO\].*:\s*Done\b', line):
+            _write_state(phase='running', server_running=True)
+            _fire_webhook_async('started')
     rc = process.poll()
     save_server_status(False)
     players.clear()
@@ -1283,12 +1672,13 @@ def emit_server_output(process):
 @app.route('/send-command', methods=['POST'])
 def send_command():
     global server_process
-    command = request.json['command'] + '\n'
+    raw = request.json['command']
+    command = (raw.lstrip('/') if raw.startswith('/') else raw) + '\n'
     try:
         if server_process and server_process.stdin and not server_process.poll():
             server_process.stdin.write(command)
             server_process.stdin.flush()
-            _append_console(f"Command: {command.strip()}")
+            _append_console(f"[{time.strftime('%H:%M:%S')}] [Panel Command]: {command.strip()}")
             return jsonify({"status": "Command sent"})
         else:
             return jsonify({"error": "Server not running or input stream closed"}), 400
@@ -1301,7 +1691,7 @@ def send_server_command(command):
         if server_process and server_process.stdin and not server_process.poll():
             server_process.stdin.write(f'{command}\n')
             server_process.stdin.flush()
-            _append_console(f"Command: {command.strip()}")
+            _append_console(f"[{time.strftime('%H:%M:%S')}] [Panel Command]: {command.strip()}")
             return jsonify({"status": "Command sent", "command": command.strip()})
         else:
             return jsonify({"error": "Server not running or input stream closed"}), 400
@@ -1348,6 +1738,11 @@ def get_players():
 @app.route('/get-console-output')
 def get_console_output():
     return jsonify(console_output)
+
+@app.route('/clear-console-output', methods=['POST'])
+def clear_console_output():
+    console_output.clear()
+    return jsonify({'ok': True})
 
 @app.route('/accept-eula', methods=['POST'])
 def accept_eula():
@@ -1418,6 +1813,39 @@ def _is_valid_package_name(name: str) -> bool:
     lower = name.lower()
     return lower.endswith(".jar") or lower.endswith(".jar.disabled")
 
+def _detect_mod_type(jar_path: str):
+    try:
+        with zipfile.ZipFile(jar_path, 'r') as z:
+            names = z.namelist()
+            if 'META-INF/neoforge.mods.toml' in names:
+                return 'NeoForge'
+            if 'META-INF/mods.toml' in names:
+                return 'Forge'
+            if 'fabric.mod.json' in names:
+                return 'Fabric'
+            if 'quilt.mod.json' in names:
+                return 'Quilt'
+    except Exception:
+        pass
+    return None
+
+def _detect_plugin_type(jar_path: str):
+    try:
+        with zipfile.ZipFile(jar_path, 'r') as z:
+            names = z.namelist()
+            if 'paper-plugin.yml' in names:
+                return 'Paper'
+            if 'bungee.yml' in names:
+                return 'BungeeCord'
+            if 'plugin.yml' in names:
+                content = z.read('plugin.yml').decode('utf-8', errors='replace')
+                if re.search(r'^api-version\s*:', content, re.MULTILINE):
+                    return 'Spigot'
+                return 'Bukkit'
+    except Exception:
+        pass
+    return None
+
 def _list_packages(kind: str):
     folder = _ensure_feature_folder(kind)
     items = []
@@ -1431,13 +1859,18 @@ def _list_packages(kind: str):
             st = os.stat(fp)
             enabled = not n.lower().endswith('.disabled')
             base = n[:-9] if n.lower().endswith('.disabled') else n
-            items.append({
+            item = {
                 'name': base,
                 'filename': n,
                 'enabled': enabled,
                 'size_bytes': st.st_size,
                 'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds')
-            })
+            }
+            if kind == 'plugins':
+                item['plugin_type'] = _detect_plugin_type(fp)
+            elif kind == 'mods':
+                item['mod_type'] = _detect_mod_type(fp)
+            items.append(item)
     except Exception:
         pass
     return items
@@ -1815,7 +2248,7 @@ def healthz():
     return jsonify({'ok': True, 'server_alive': alive, 'status': st.get('phase'), 'uptime_system_seconds': _read_uptime_seconds()})
 # ---- END system metrics endpoints ----
 
-def _process_server_icon(data_bytes: bytes, keep_aspect: bool = False) -> str:
+def _process_server_icon(data_bytes: bytes, keep_aspect: bool = False, zoom: float = 1.0, offset_x: float = 0.0, offset_y: float = 0.0) -> str:
     if Image is None:
         raise RuntimeError('Pillow not installed')
     if not data_bytes or len(data_bytes) < 16:
@@ -1842,11 +2275,23 @@ def _process_server_icon(data_bytes: bytes, keep_aspect: bool = False) -> str:
         img = canvas
     else:
         w, h = img.size
-        if w != h:
-            side = min(w, h)
-            left = (w - side) // 2
-            top = (h - side) // 2
-            img = img.crop((left, top, left + side, top + side))
+        try:
+            zoom = max(1.0, min(4.0, float(zoom or 1.0)))
+        except Exception:
+            zoom = 1.0
+        try:
+            offset_x = max(-128.0, min(128.0, float(offset_x or 0.0)))
+            offset_y = max(-128.0, min(128.0, float(offset_y or 0.0)))
+        except Exception:
+            offset_x = 0.0
+            offset_y = 0.0
+        base_scale = max(256.0 / max(w, 1), 256.0 / max(h, 1))
+        scale = base_scale * zoom
+        crop_w = 256.0 / scale
+        crop_h = 256.0 / scale
+        left = (w / 2.0) - (crop_w / 2.0) - (offset_x / scale)
+        top = (h / 2.0) - (crop_h / 2.0) - (offset_y / scale)
+        img = img.crop((left, top, left + crop_w, top + crop_h))
         img = img.resize((64, 64), Image.LANCZOS)
     os.makedirs(server_files_dir, exist_ok=True)
     out_path = os.path.join(server_files_dir, 'server-icon.png')
@@ -1873,6 +2318,9 @@ def server_icon_route():
     val = request.form.get('keep_aspect') or (request.json.get('keep_aspect') if request.is_json else None)
     if isinstance(val, str) and val.lower() in {'1','true','yes','on'}:
         keep_aspect = True
+    zoom = request.form.get('zoom') or (request.json.get('zoom') if request.is_json else 1)
+    offset_x = request.form.get('offset_x') or (request.json.get('offset_x') if request.is_json else 0)
+    offset_y = request.form.get('offset_y') or (request.json.get('offset_y') if request.is_json else 0)
     if 'file' in request.files:
         f = request.files['file']
         blob = f.read()
@@ -1889,10 +2337,282 @@ def server_icon_route():
         else:
             return jsonify({'ok': False, 'error': 'no file or url'}), 400
     try:
-        _process_server_icon(blob, keep_aspect=keep_aspect)
+        _process_server_icon(blob, keep_aspect=keep_aspect, zoom=zoom, offset_x=offset_x, offset_y=offset_y)
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/server-icon-delete', methods=['POST'])
+def server_icon_delete():
+    p = os.path.join(server_files_dir, 'server-icon.png')
+    try:
+        if os.path.isfile(p):
+            os.remove(p)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+def _mc_slp_query(host='127.0.0.1', port=25565, timeout=2.0):
+    """Query Minecraft server via Server List Ping. Returns {online, max} or None."""
+    def write_varint(v):
+        out = bytearray()
+        while True:
+            seg = v & 0x7F
+            v >>= 7
+            if v:
+                seg |= 0x80
+            out.append(seg)
+            if not v:
+                return bytes(out)
+
+    def read_varint(conn):
+        n = 0
+        for shift in range(0, 35, 7):
+            raw = conn.recv(1)
+            if not raw:
+                raise ConnectionError('disconnected')
+            b = raw[0]
+            n |= (b & 0x7F) << shift
+            if not (b & 0x80):
+                return n
+        raise OverflowError('varint too long')
+
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect((host, int(port)))
+        host_bytes = host.encode('utf-8')
+        payload = (write_varint(0x00) +
+                   write_varint(764) +
+                   write_varint(len(host_bytes)) + host_bytes +
+                   struct.pack('>H', int(port)) +
+                   write_varint(1))
+        sock.sendall(write_varint(len(payload)) + payload)
+        sr = write_varint(0x00)
+        sock.sendall(write_varint(len(sr)) + sr)
+        read_varint(sock)
+        read_varint(sock)
+        json_len = read_varint(sock)
+        buf = b''
+        while len(buf) < json_len:
+            chunk = sock.recv(min(4096, json_len - len(buf)))
+            if not chunk:
+                break
+            buf += chunk
+        data = json.loads(buf.decode('utf-8'))
+        p = data.get('players', {})
+        return {'online': p.get('online', 0), 'max': p.get('max', 0)}
+    except Exception:
+        return None
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+@app.route('/server-players')
+def server_players():
+    props_path = os.path.join(server_files_dir, 'server.properties')
+    props = read_properties(props_path)
+    try:
+        port = int(props.get('server-port', 25565))
+    except Exception:
+        port = 25565
+    result = _mc_slp_query(host='127.0.0.1', port=port)
+    if result is None:
+        return jsonify({'online': None, 'max': None, 'available': False})
+    return jsonify({'online': result['online'], 'max': result['max'], 'available': True})
+
+def _discord_embed(title, description, color, fields=None, footer=None, author_name=None, author_icon=None):
+    embed = {
+        'description': description,
+        'color': color,
+        'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+        'footer': {'text': footer or 'Minecraft Server Dashboard'},
+    }
+    if title:
+        embed['title'] = title
+    if fields:
+        embed['fields'] = fields
+    if author_name:
+        author = {'name': author_name}
+        if author_icon:
+            author['icon_url'] = author_icon
+        embed['author'] = author
+    return embed
+
+def _render_favicon_png(accent='#c2553d', size=64):
+    try:
+        from PIL import Image, ImageDraw
+        scale = size / 32
+        img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle([0, 0, size - 1, size - 1], radius=max(1, round(7 * scale)), fill=accent)
+        w = max(1, round(2 * scale))
+        def pt(x, y):
+            return (round(x * scale), round(y * scale))
+        draw.line([pt(16,6), pt(6,11), pt(6,21), pt(16,26), pt(26,21), pt(26,11), pt(16,6)], fill='#fff8f3', width=w)
+        draw.line([pt(6,11), pt(16,16), pt(26,11)], fill='#fff8f3', width=w)
+        draw.line([pt(16,16), pt(16,26)], fill='#fff8f3', width=w)
+        buf = BytesIO()
+        img.save(buf, 'PNG')
+        return buf.getvalue()
+    except Exception:
+        return None
+
+def _fire_webhook_async(event, detail=''):
+    def _send():
+        try:
+            with app.app_context():
+                s = get_panel_settings()
+                if not s.get('discord_webhook_enabled'):
+                    return
+                toggle_map = {
+                    'started':    'discord_notify_start',
+                    'stopped':    'discord_notify_stop',
+                    'restarting': 'discord_notify_restart',
+                    'crashed':    'discord_notify_crash',
+                }
+                toggle_key = toggle_map.get(event)
+                if toggle_key and not s.get(toggle_key, True):
+                    return
+                url = str(s.get('discord_webhook_url', '')).strip()
+                if not url or not requests:
+                    return
+                mc_ver = get_mc_version_from_logs() or '?'
+                sname = str(s.get('discord_server_name', '')).strip() or f'Minecraft {mc_ver}'
+                accent = str(s.get('accent_color', '#c2553d'))
+                footer = f'Minecraft {mc_ver}'
+
+                icon_bytes = _render_favicon_png(accent)
+                icon_url = 'attachment://favicon.png' if icon_bytes else None
+
+                if event == 'started':
+                    desc = f'**{sname}** is now online!'
+                    color = 0x57f287
+                elif event == 'stopped':
+                    desc = f'**{sname}** has shut down.'
+                    color = 0x949ba4
+                elif event == 'crashed':
+                    desc = f'**{sname}** crashed unexpectedly.'
+                    if s.get('auto_restart'):
+                        desc += ' Restarting shortly.'
+                    if detail:
+                        desc += f'\n```\n{detail[:300]}\n```'
+                    color = 0xed4245
+                elif event == 'restarting':
+                    desc = f'**{sname}** is restarting…'
+                    color = 0xf0a500
+                else:
+                    desc = detail or event.title()
+                    color = 0x5865f2
+
+                embed = _discord_embed(None, desc, color, None, footer, author_name=sname, author_icon=icon_url)
+
+                if icon_bytes:
+                    payload = {'embeds': [embed], 'attachments': [{'id': 0, 'filename': 'favicon.png'}]}
+                    requests.post(url, data={'payload_json': json.dumps(payload)},
+                                  files={'files[0]': ('favicon.png', icon_bytes, 'image/png')}, timeout=5)
+                else:
+                    requests.post(url, json={'embeds': [embed]}, timeout=5)
+        except Exception:
+            pass
+    Thread(target=_send, daemon=True).start()
+
+def _fire_player_webhook_async(event, player, detail=''):
+    def _send():
+        try:
+            with app.app_context():
+                s = get_panel_settings()
+                if not s.get('discord_player_webhook_enabled'):
+                    return
+                toggle_map = {
+                    'join':        'discord_notify_join',
+                    'leave':       'discord_notify_leave',
+                    'achievement': 'discord_notify_achievement',
+                    'death':       'discord_notify_death',
+                    'first_join':  'discord_notify_first_join',
+                }
+                toggle_key = toggle_map.get(event)
+                if toggle_key and not s.get(toggle_key, True):
+                    return
+                url = str(s.get('discord_player_webhook_url', '')).strip()
+                if not url or not requests:
+                    return
+                mc_ver = get_mc_version_from_logs() or '?'
+                sname = str(s.get('discord_server_name', '')).strip() or None
+                head_url = f'https://mc-heads.net/avatar/{player}/64'
+                footer = sname or f'Minecraft {mc_ver}'
+
+                if event == 'join':
+                    embed = _discord_embed(
+                        None,
+                        f'**{player}** has joined the server!',
+                        0x57f287, None, footer, author_name=player, author_icon=head_url)
+                elif event == 'leave':
+                    fields = []
+                    if detail and s.get('discord_notify_playtime', True):
+                        fields.append({'name': 'Session', 'value': detail, 'inline': True})
+                    embed = _discord_embed(
+                        None,
+                        f'**{player}** has left the server.',
+                        0x949ba4, fields or None, footer, author_name=player, author_icon=head_url)
+                elif event == 'achievement':
+                    fields = [{'name': 'Advancement', 'value': detail or '—', 'inline': False}]
+                    embed = _discord_embed(
+                        'New Advancement',
+                        f'**{player}** just earned an advancement!',
+                        0xfee75c, fields, footer, author_name=player, author_icon=head_url)
+                elif event == 'death':
+                    body = detail if detail else f'**{player}** met their end.'
+                    embed = _discord_embed(None, body, 0xed4245, None, footer, author_name=player, author_icon=head_url)
+                elif event == 'first_join':
+                    embed = _discord_embed(
+                        'First time on the server!',
+                        f'Welcome **{player}** — joining for the very first time!',
+                        0xf59e0b, None, footer, author_name=player, author_icon=head_url)
+                else:
+                    embed = _discord_embed(player, detail or '', 0x5865f2, None, footer, author_name=player, author_icon=head_url)
+
+                requests.post(url, json={'embeds': [embed]}, timeout=5)
+        except Exception:
+            pass
+    Thread(target=_send, daemon=True).start()
+
+def _fire_chat_webhook_async(player, message):
+    def _send():
+        try:
+            with app.app_context():
+                s = get_panel_settings()
+                if not s.get('discord_chat_webhook_enabled'):
+                    return
+                url = str(s.get('discord_chat_webhook_url', '')).strip()
+                if not url or not requests:
+                    return
+                sname = str(s.get('discord_server_name', '')).strip() or None
+                head_url = f'https://mc-heads.net/avatar/{player}/64'
+                footer = sname or 'MC Panel'
+                embed = _discord_embed(None, message, 0x5865f2, None, footer, author_name=player, author_icon=head_url)
+                requests.post(url, json={'embeds': [embed]}, timeout=5)
+        except Exception:
+            pass
+    Thread(target=_send, daemon=True).start()
+
+def _check_first_join_async(player):
+    def _check():
+        try:
+            with app.app_context():
+                db = get_db()
+                db.execute('CREATE TABLE IF NOT EXISTS seen_players (name TEXT PRIMARY KEY)')
+                cur = db.execute('INSERT OR IGNORE INTO seen_players (name) VALUES (?)', (player,))
+                db.commit()
+                if cur.rowcount:
+                    _fire_player_webhook_async('first_join', player)
+        except Exception:
+            pass
+    Thread(target=_check, daemon=True).start()
 
 @app.route('/server-status')
 def server_status():
@@ -1923,6 +2643,15 @@ def server_info():
     running_flag = read_server_status()
     uptime_sec = (time.time() - SERVER_START_TS) if (SERVER_START_TS and running_flag and is_process_alive()) else 0
     uptime_human = human_duration(uptime_sec) if uptime_sec else None
+    forge_ver, _ = get_forge_info_from_logs()
+    loader = 'Forge' if forge_ver else None
+    def _count_packages(kind):
+        if not _feature_folder_exists(kind):
+            return None, None
+        items = _list_packages(kind)
+        return len(items), sum(1 for i in items if i['enabled'])
+    mods_total, mods_enabled = _count_packages('mods')
+    plugins_total, plugins_enabled = _count_packages('plugins')
     return jsonify({
         "mc_version": mc_version,
         "java_version": java_str,
@@ -1932,8 +2661,26 @@ def server_info():
         "local_ip": local_ip,
         "public_ip": public_ip,
         "uptime_seconds": int(uptime_sec) if uptime_sec else 0,
-        "uptime_human": uptime_human
+        "uptime_human": uptime_human,
+        "loader": loader,
+        "forge_version": forge_ver,
+        "mods_total": mods_total,
+        "mods_enabled": mods_enabled,
+        "plugins_total": plugins_total,
+        "plugins_enabled": plugins_enabled,
     })
+
+@app.route('/reinstall', methods=['POST'])
+def reinstall():
+    global console_output
+    force_stop_server()
+    try:
+        if os.path.isdir(server_files_dir):
+            shutil.rmtree(server_files_dir)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    console_output.clear()
+    return jsonify({'ok': True})
 
 if __name__ == '__main__':
     with app.app_context():

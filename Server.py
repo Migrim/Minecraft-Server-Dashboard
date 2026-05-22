@@ -231,15 +231,17 @@ def ensure_jar_present():
     ep = request.endpoint or ''
     if os.path.isfile(jar_path) or os.path.isfile(run_script_path):
         return
+    if not session.get('user'):
+        return  # not logged in — require_login handles the redirect to /login
     allowed_eps = {
-        'install','upload_jar','upload_forge_folder','static','jar_status','server_info',
-        'files','fs_tree','fs_open','fs_save','fs_download',
-        'login','logout','change_password'
+        'install', 'upload_jar', 'upload_forge_folder', 'static', 'jar_status',
+        'files', 'fs_tree', 'fs_open', 'fs_save', 'fs_download',
+        'login', 'logout', 'change_password'
     }
     if ep in allowed_eps:
         return
     p = request.path or ''
-    if p.startswith(('/fs-tree','/fs-open','/fs-save','/fs-download','/static/')):
+    if p.startswith(('/fs-tree', '/fs-open', '/fs-save', '/fs-download', '/static/')):
         return
     return redirect(url_for('install'))
 
@@ -248,7 +250,7 @@ def require_login():
     ep = request.endpoint or ''
     p = request.path or ''
     public_eps = {
-        'login','logout','change_password','static','install','upload_jar','upload_forge_folder','jar_status','server_info'
+        'login', 'logout', 'change_password', 'static', 'install', 'jar_status'
     }
     if p.startswith('/static/'):
         return
@@ -256,6 +258,11 @@ def require_login():
         return
     if not session.get('user'):
         return redirect(url_for('login'))
+    u = get_user(session['user'])
+    if u and u.get('must_change'):
+        session.clear()
+        session['pending_user'] = u['username']
+        return redirect(url_for('change_password'))
 
 def bootstrap_db_once():
     if app.config.get('BOOTSTRAPPED'):
@@ -2634,6 +2641,10 @@ def server_info():
     port = props.get('server-port', '25565')
     motd = props.get('motd', None)
     online_mode = props.get('online-mode', None)
+    try:
+        max_players = int(props.get('max-players', 20))
+    except (ValueError, TypeError):
+        max_players = 20
     if isinstance(online_mode, str):
         online_mode = online_mode.strip().lower() == 'true'
     mc_version = get_mc_version_from_logs()
@@ -2668,6 +2679,7 @@ def server_info():
         "mods_enabled": mods_enabled,
         "plugins_total": plugins_total,
         "plugins_enabled": plugins_enabled,
+        "max_players": max_players,
     })
 
 @app.route('/reinstall', methods=['POST'])

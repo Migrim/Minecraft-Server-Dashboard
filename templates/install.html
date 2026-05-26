@@ -708,15 +708,29 @@
     const onVis = () => { if (labelEl) labelEl.dataset.bg = document.hidden ? '1' : ''; };
     document.addEventListener('visibilitychange', onVis);
 
+    const _label = (pct, chunksDone, status) => {
+      if (!labelEl) return;
+      const bg = labelEl.dataset.bg ? '  ·  background' : '';
+      if (total === 1) {
+        labelEl.textContent = `${pct}%  ·  ${status}${bg}`;
+      } else {
+        labelEl.textContent = `${pct}%  ·  chunk ${chunksDone} / ${total}  ·  ${status}${bg}`;
+      }
+    };
+
     try {
       for (let i = 0; i < total; i++) {
         const chunk = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
         let lastErr = null;
 
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          const pctNow = Math.round((i / total) * 100);
           if (attempt > 0) {
-            if (labelEl) labelEl.textContent = `Retrying chunk ${i + 1}/${total} (attempt ${attempt + 1})…`;
+            _label(pctNow, i + 1, `retrying… (${attempt + 1} / ${MAX_RETRIES})`);
             await _sleep(Math.min(600 * Math.pow(2, attempt - 1), 10000));
+          } else {
+            if (fillEl) fillEl.style.width = pctNow + '%';
+            _label(pctNow, i + 1, 'uploading');
           }
 
           const fd = new FormData();
@@ -736,12 +750,9 @@
 
         if (lastErr) throw lastErr;
 
-        const pct  = Math.round(((i + 1) / total) * 100);
-        const hint = (labelEl && labelEl.dataset.bg) ? ' (uploading in background…)' : '';
-        if (fillEl)  fillEl.style.width  = pct + '%';
-        if (labelEl) labelEl.textContent = total > 1
-          ? `Uploading… ${pct}%  [${i + 1}/${total}]${hint}`
-          : `Uploading… ${pct}%${hint}`;
+        const pct = Math.round(((i + 1) / total) * 100);
+        if (fillEl) fillEl.style.width = pct + '%';
+        _label(pct, i + 1, i + 1 === total ? 'done — assembling…' : `${i + 1} transferred ✓`);
       }
     } finally {
       document.removeEventListener('visibilitychange', onVis);

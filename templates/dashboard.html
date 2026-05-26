@@ -688,7 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const eulaSetupRe = /(You need to agree to the EULA|Failed to load eula\.txt|Failed to load properties from file:\s*server\.properties|NoSuchFileException:\s*server\.properties)/i;
   const readyRe = /\[Server thread\/INFO\]: Done/i;
   const exitRe  = /Server process exited/i;
-  const errorRe = /(Exception|Error:|UnsupportedClassVersionError|Could not find or load main class|Address already in use|A fatal error has been detected|Failed|Failure)/i;
+  const errorRe = /(Exception|Error:|UnsupportedClassVersionError|Could not find or load main class|Address already in use|A fatal error has been detected|\bFailed\b|\bFailure\b)/i;
 
   /* ---- console colorize ---- */
   function colorize(line) {

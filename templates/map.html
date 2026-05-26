@@ -69,32 +69,25 @@
 {% block scripts %}
 <script>
 (function () {
-  const port = {{ bluemap_port | tojson }};
-  const url  = window.location.protocol + '//' + window.location.hostname + ':' + port;
+  const port  = {{ bluemap_port | tojson }};
   const frame = document.getElementById('bluemap-frame');
   const err   = document.getElementById('map-error');
   document.getElementById('bm-port').textContent = port;
 
-  frame.src = url;
-
-  frame.addEventListener('error', () => {
-    frame.style.display = 'none';
-    err.style.display   = 'flex';
-  });
+  frame.src = '/map/';
 
   frame.addEventListener('load', () => {
     try {
       const doc = frame.contentDocument || frame.contentWindow.document;
-      if (!doc || doc.title === '404' || doc.body.textContent.trim() === '') {
-        throw new Error('empty');
-      }
-      frame.style.display = 'block';
-      err.style.display   = 'none';
-    } catch (_) {
-      /* cross-origin load succeeded — BlueMap is up */
-      frame.style.display = 'block';
-      err.style.display   = 'none';
-    }
+      if (!doc || doc.body.textContent.trim() === '') throw new Error();
+    } catch (_) { /* cross-origin — assume ok */ }
+    frame.style.display = 'block';
+    err.style.display   = 'none';
+  });
+
+  frame.addEventListener('error', () => {
+    frame.style.display = 'none';
+    err.style.display   = 'flex';
   });
 })();
 </script>

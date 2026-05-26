@@ -671,6 +671,84 @@
     forgePanel.style.display = ''; jarPanel.style.display = 'none';
   });
 
+  /* ── chunked upload helpers ── */
+  const CHUNK_SIZE  = 1 * 1024 * 1024; // 1 MB per chunk
+  const MAX_RETRIES = 5;
+
+  function _genId() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID)
+      return crypto.randomUUID().replace(/-/g, '');
+    return Date.now().toString(36) + Math.random().toString(36).slice(2)
+           + Math.random().toString(36).slice(2);
+  }
+
+  function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function _xhrChunk(fd) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload-chunk');
+      xhr.timeout    = 90000;
+      xhr.onload     = () => { try { resolve(JSON.parse(xhr.responseText)); }
+                               catch (_) { reject(new Error('Bad response')); } };
+      xhr.onerror    = () => reject(new Error('Network error'));
+      xhr.ontimeout  = () => reject(new Error('Request timed out'));
+      xhr.send(fd);
+    });
+  }
+
+  async function uploadChunked({ file, destType, fillEl, labelEl }) {
+    const total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    const id    = _genId();
+
+    let wakeLock = null;
+    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen').catch(() => null); }
+    catch (_) {}
+
+    const onVis = () => { if (labelEl) labelEl.dataset.bg = document.hidden ? '1' : ''; };
+    document.addEventListener('visibilitychange', onVis);
+
+    try {
+      for (let i = 0; i < total; i++) {
+        const chunk = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
+        let lastErr = null;
+
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          if (attempt > 0) {
+            if (labelEl) labelEl.textContent = `Retrying chunk ${i + 1}/${total} (attempt ${attempt + 1})…`;
+            await _sleep(Math.min(600 * Math.pow(2, attempt - 1), 10000));
+          }
+
+          const fd = new FormData();
+          fd.append('upload_id',    id);
+          fd.append('dest_type',    destType);
+          fd.append('chunk_index',  String(i));
+          fd.append('total_chunks', String(total));
+          fd.append('filename',     file.name);
+          fd.append('chunk',        chunk, file.name);
+
+          try {
+            const r = await _xhrChunk(fd);
+            if (r.ok) { lastErr = null; break; }
+            lastErr = new Error(r.error || 'Server error');
+          } catch (e) { lastErr = e; }
+        }
+
+        if (lastErr) throw lastErr;
+
+        const pct  = Math.round(((i + 1) / total) * 100);
+        const hint = (labelEl && labelEl.dataset.bg) ? ' (uploading in background…)' : '';
+        if (fillEl)  fillEl.style.width  = pct + '%';
+        if (labelEl) labelEl.textContent = total > 1
+          ? `Uploading… ${pct}%  [${i + 1}/${total}]${hint}`
+          : `Uploading… ${pct}%${hint}`;
+      }
+    } finally {
+      document.removeEventListener('visibilitychange', onVis);
+      if (wakeLock) { try { wakeLock.release(); } catch (_) {} }
+    }
+  }
+
   /* ── standard JAR handling ── */
   const dropzone      = document.getElementById('dropzone');
   const fileInput     = document.getElementById('file');
@@ -709,44 +787,28 @@
     setFile(f);
   });
 
-  uploadBtn.addEventListener('click', () => {
+  uploadBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
     uploadBtn.disabled = true;
     progressWrap.classList.add('visible');
     progressFill.style.width = '0%';
     progressLabel.textContent = 'Uploading…';
-
-    const fd = new FormData();
-    fd.append('file', selectedFile);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/upload-jar');
-    xhr.upload.addEventListener('progress', e => {
-      if (e.lengthComputable) {
-        const p = Math.round((e.loaded / e.total) * 100);
-        progressFill.style.width = p + '%';
-        progressLabel.textContent = `Uploading… ${p}%`;
-      }
-    });
-    xhr.addEventListener('load', () => {
-      let ok = false, err = '';
-      try { const r = JSON.parse(xhr.responseText); ok = !!r.ok; err = r.error || ''; } catch (_) { err = 'Unexpected response'; }
-      if (ok) {
-        progressFill.style.width = '100%';
-        progressLabel.textContent = 'Upload complete — redirecting…';
-        toast('Upload complete', 'Redirecting to dashboard in 5 seconds', 'ok', [{ label: 'Open now', onClick: () => location.href = '/' }], 5000);
-        setTimeout(() => location.href = '/', 5000);
-      } else {
-        progressWrap.classList.remove('visible');
-        uploadBtn.disabled = false;
-        toast('Upload failed', err || 'Please try again', 'err', [{ label: 'Retry', onClick: () => uploadBtn.click() }]);
-      }
-    });
-    xhr.addEventListener('error', () => {
+    try {
+      await uploadChunked({
+        file: selectedFile, destType: 'jar',
+        fillEl: progressFill, labelEl: progressLabel
+      });
+      progressFill.style.width = '100%';
+      progressLabel.textContent = 'Upload complete — redirecting…';
+      toast('Upload complete', 'Redirecting to dashboard', 'ok',
+            [{ label: 'Open now', onClick: () => location.href = '/' }], 5000);
+      setTimeout(() => location.href = '/', 5000);
+    } catch (e) {
       progressWrap.classList.remove('visible');
       uploadBtn.disabled = false;
-      toast('Network error', 'Please check your connection', 'err');
-    });
-    xhr.send(fd);
+      toast('Upload failed', e.message || 'Please try again', 'err',
+            [{ label: 'Retry', onClick: () => uploadBtn.click() }]);
+    }
   });
 
   /* ── Forge folder / ZIP handling ── */
@@ -807,51 +869,65 @@
     setForgeSelection('zip', f);
   });
 
-  forgeUploadBtn.addEventListener('click', () => {
+  forgeUploadBtn.addEventListener('click', async () => {
     if (!forgeSelection) return;
     forgeUploadBtn.disabled = true;
     forgeProgressWrap.classList.add('visible');
     forgeProgressFill.style.width = '0%';
     forgeProgressLabel.textContent = 'Uploading…';
-
-    const fd = new FormData();
-    if (forgeSelection.type === 'zip') {
-      fd.append('zip', forgeSelection.data);
-    } else {
-      for (const file of forgeSelection.data) {
-        fd.append('files', file, file.webkitRelativePath || file.name);
-      }
-    }
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/upload-forge-folder');
-    xhr.upload.addEventListener('progress', e => {
-      if (e.lengthComputable) {
-        const p = Math.round((e.loaded / e.total) * 100);
-        forgeProgressFill.style.width = p + '%';
-        forgeProgressLabel.textContent = `Uploading… ${p}%`;
-      }
-    });
-    xhr.addEventListener('load', () => {
-      let ok = false, err = '';
-      try { const r = JSON.parse(xhr.responseText); ok = !!r.ok; err = r.error || ''; } catch (_) { err = 'Unexpected response'; }
-      if (ok) {
-        forgeProgressFill.style.width = '100%';
-        forgeProgressLabel.textContent = 'Upload complete — redirecting…';
-        toast('Upload complete', 'Redirecting to dashboard in 5 seconds', 'ok', [{ label: 'Open now', onClick: () => location.href = '/' }], 5000);
-        setTimeout(() => location.href = '/', 5000);
+    try {
+      if (forgeSelection.type === 'zip') {
+        await uploadChunked({
+          file: forgeSelection.data, destType: 'forge-zip',
+          fillEl: forgeProgressFill, labelEl: forgeProgressLabel
+        });
       } else {
-        forgeProgressWrap.classList.remove('visible');
-        forgeUploadBtn.disabled = false;
-        toast('Upload failed', err || 'Please try again', 'err', [{ label: 'Retry', onClick: () => forgeUploadBtn.click() }]);
+        // Folder: single multipart POST with automatic retry
+        const fd = new FormData();
+        for (const file of forgeSelection.data)
+          fd.append('files', file, file.webkitRelativePath || file.name);
+
+        let lastErr = null;
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          if (attempt > 0) {
+            forgeProgressLabel.textContent = `Retrying… (attempt ${attempt + 1})`;
+            await _sleep(Math.min(600 * Math.pow(2, attempt - 1), 10000));
+          }
+          try {
+            const result = await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open('POST', '/upload-forge-folder');
+              xhr.timeout = 300000;
+              xhr.upload.addEventListener('progress', e => {
+                if (e.lengthComputable) {
+                  const p = Math.round((e.loaded / e.total) * 100);
+                  forgeProgressFill.style.width = p + '%';
+                  forgeProgressLabel.textContent = `Uploading… ${p}%`;
+                }
+              });
+              xhr.onload    = () => { try { resolve(JSON.parse(xhr.responseText)); }
+                                     catch (_) { reject(new Error('Bad response')); } };
+              xhr.onerror   = () => reject(new Error('Network error'));
+              xhr.ontimeout = () => reject(new Error('Timed out'));
+              xhr.send(fd);
+            });
+            if (result.ok) { lastErr = null; break; }
+            lastErr = new Error(result.error || 'Upload failed');
+          } catch (e) { lastErr = e; }
+        }
+        if (lastErr) throw lastErr;
       }
-    });
-    xhr.addEventListener('error', () => {
+      forgeProgressFill.style.width = '100%';
+      forgeProgressLabel.textContent = 'Upload complete — redirecting…';
+      toast('Upload complete', 'Redirecting to dashboard', 'ok',
+            [{ label: 'Open now', onClick: () => location.href = '/' }], 5000);
+      setTimeout(() => location.href = '/', 5000);
+    } catch (e) {
       forgeProgressWrap.classList.remove('visible');
       forgeUploadBtn.disabled = false;
-      toast('Network error', 'Please check your connection', 'err');
-    });
-    xhr.send(fd);
+      toast('Upload failed', e.message || 'Please try again', 'err',
+            [{ label: 'Retry', onClick: () => forgeUploadBtn.click() }]);
+    }
   });
 
   /* check status */

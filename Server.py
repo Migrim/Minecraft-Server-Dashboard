@@ -53,6 +53,9 @@ app.config.setdefault('BOOTSTRAPPED', False)
 playtime_store = {}
 player_join_times = {}  # username -> join timestamp (float)
 
+CHUNK_UPLOADS = {}
+CHUNK_UPLOADS_LOCK = threading.Lock()
+
 PANEL_DEFAULTS = {
     'auto_restart': True,
     'restart_delay_sec': 10,
@@ -278,6 +281,11 @@ def bootstrap_db_once():
             db.execute('UPDATE users SET password=?, must_change=1 WHERE username=?',
                        (generate_password_hash('1234', method=HASH_METHOD), 'admin'))
         db.commit()
+    # Clean up any stale chunk upload directories from a previous run
+    _chunk_base = os.path.join(app.instance_path, 'chunks')
+    if os.path.isdir(_chunk_base):
+        try: shutil.rmtree(_chunk_base)
+        except Exception: pass
     ensure_panel_defaults()
     app.config['BOOTSTRAPPED'] = True
 
@@ -972,6 +980,112 @@ def upload_forge_folder():
     if not saved:
         return jsonify({'ok': False, 'error': 'No files could be saved'}), 400
     return jsonify({'ok': True, 'saved': saved})
+
+@app.route('/upload-chunk', methods=['POST'])
+def upload_chunk():
+    upload_id  = (request.form.get('upload_id')  or '').strip()
+    dest_type  = (request.form.get('dest_type')  or 'jar').strip()
+    filename   = secure_filename(request.form.get('filename') or '')
+
+    if dest_type not in ('jar', 'forge-zip'):
+        return jsonify({'ok': False, 'error': 'invalid dest_type'}), 400
+    if not upload_id or not re.match(r'^[a-zA-Z0-9_\-]{4,64}$', upload_id):
+        return jsonify({'ok': False, 'error': 'invalid upload_id'}), 400
+    if not filename:
+        return jsonify({'ok': False, 'error': 'missing filename'}), 400
+    if dest_type == 'jar' and not filename.lower().endswith('.jar'):
+        return jsonify({'ok': False, 'error': 'must be a .jar'}), 400
+    if dest_type == 'forge-zip' and not filename.lower().endswith('.zip'):
+        return jsonify({'ok': False, 'error': 'must be a .zip'}), 400
+
+    try:
+        chunk_index  = int(request.form.get('chunk_index',  '0'))
+        total_chunks = int(request.form.get('total_chunks', '1'))
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'invalid chunk params'}), 400
+    if chunk_index < 0 or total_chunks < 1 or chunk_index >= total_chunks:
+        return jsonify({'ok': False, 'error': 'chunk index out of range'}), 400
+
+    chunk_data = request.files.get('chunk')
+    if chunk_data is None:
+        return jsonify({'ok': False, 'error': 'missing chunk data'}), 400
+
+    chunk_dir = os.path.join(app.instance_path, 'chunks', upload_id)
+    os.makedirs(chunk_dir, exist_ok=True)
+    chunk_data.save(os.path.join(chunk_dir, f'{chunk_index:08d}.part'))
+
+    with CHUNK_UPLOADS_LOCK:
+        entry = CHUNK_UPLOADS.setdefault(upload_id, {
+            'total': total_chunks, 'filename': filename,
+            'dest_type': dest_type, 'received': set(),
+            'assembling': False, 'ts': time.time()
+        })
+        entry['received'].add(chunk_index)
+        received_count = len(entry['received'])
+        should_assemble = (received_count >= total_chunks and not entry['assembling'])
+        if should_assemble:
+            entry['assembling'] = True
+
+    if not should_assemble:
+        return jsonify({'ok': True, 'done': False,
+                        'received': received_count, 'total': total_chunks})
+
+    tmp_path = os.path.join(app.instance_path, f'_chunk_{upload_id}.tmp')
+    try:
+        os.makedirs(server_files_dir, exist_ok=True)
+        with open(tmp_path, 'wb') as out_f:
+            for idx in range(total_chunks):
+                with open(os.path.join(chunk_dir, f'{idx:08d}.part'), 'rb') as in_f:
+                    shutil.copyfileobj(in_f, out_f)
+
+        if dest_type == 'jar':
+            final = os.path.join(server_files_dir, jar_filename)
+            if os.path.exists(final):
+                os.remove(final)
+            os.replace(tmp_path, final)
+            return jsonify({'ok': True, 'done': True})
+
+        # forge-zip: extract into server folder
+        base_abs = os.path.abspath(server_files_dir)
+        def _safe_zip(rel):
+            parts = [p for p in rel.replace('\\', '/').split('/') if p and p not in ('.', '..')]
+            if not parts:
+                return None
+            d = os.path.join(server_files_dir, *parts)
+            return d if os.path.abspath(d).startswith(base_abs) else None
+
+        with zipfile.ZipFile(tmp_path, 'r') as zf:
+            members = [m for m in zf.namelist() if m and not m.startswith('__MACOSX')]
+            tops = {m.split('/')[0] for m in members}
+            strip = ''
+            if len(tops) == 1:
+                cand = list(tops)[0] + '/'
+                if all(m == cand.rstrip('/') or m.startswith(cand) for m in members):
+                    strip = cand
+            for member in members:
+                rel = member[len(strip):] if strip and member.startswith(strip) else member
+                if not rel or rel.endswith('/'):
+                    continue
+                dst = _safe_zip(rel)
+                if not dst:
+                    continue
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                with zf.open(member) as src, open(dst, 'wb') as dst_f:
+                    shutil.copyfileobj(src, dst_f)
+        return jsonify({'ok': True, 'done': True})
+
+    except zipfile.BadZipFile:
+        return jsonify({'ok': False, 'error': 'Invalid ZIP file'}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        if os.path.exists(tmp_path):
+            try: os.remove(tmp_path)
+            except Exception: pass
+        try: shutil.rmtree(chunk_dir)
+        except Exception: pass
+        with CHUNK_UPLOADS_LOCK:
+            CHUNK_UPLOADS.pop(upload_id, None)
 
 @app.route('/feature-flags')
 def feature_flags():

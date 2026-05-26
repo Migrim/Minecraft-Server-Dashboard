@@ -61,6 +61,9 @@
   .row .meta { color:var(--text-3); font-size:11.5px; }
   .row.file .chev { visibility:hidden; }
   .row.folder.drop-target { outline:2px dashed var(--accent); background:var(--accent-soft); }
+  .row.tree-dragging { opacity:.3; pointer-events:none; }
+  .row.tree-drop-over { background:var(--accent-soft) !important; outline:2px solid var(--accent); outline-offset:-2px; color:var(--accent-ink) !important; }
+  .row.tree-drop-over .icon, .row.tree-drop-over .name, .row.tree-drop-over .chev { color:var(--accent) !important; }
   .rename-input { background:var(--surface); border:1px solid var(--accent); color:var(--text); border-radius:6px; padding:3px 8px; font:inherit; font-size:13px; min-width:100px; max-width:60%; outline:none; box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 18%,transparent); }
   .tree-section { padding:10px 10px 4px; font-size:10.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
 
@@ -129,14 +132,31 @@
 
   .hidden { display:none !important; }
 
+  /* ---------- prompt modal ---------- */
+  @keyframes modalBackdropIn { from{opacity:0} to{opacity:1} }
+  @keyframes modalCardIn { from{opacity:0;transform:scale(.95) translateY(-6px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  .modal-overlay { position:fixed; inset:0; z-index:500; background:rgba(0,0,0,.45); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; animation:modalBackdropIn .15s ease; }
+  .modal-overlay.hidden { display:none !important; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-md); padding:26px 24px 20px; width:340px; animation:modalCardIn .18s cubic-bezier(.34,1.4,.64,1); }
+  .modal-title { font-size:15px; font-weight:600; color:var(--text); margin:0 0 6px; }
+  .modal-sub { font-size:12.5px; color:var(--text-3); margin:0 0 14px; }
+  .modal-input { display:block; width:100%; box-sizing:border-box; padding:9px 12px; background:var(--bg-soft); border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13.5px; color:var(--text); outline:none; margin-bottom:18px; transition:border-color .15s,box-shadow .15s; }
+  .modal-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 18%,transparent); }
+  .modal-actions { display:flex; justify-content:flex-end; gap:8px; }
+  .modal-btn { display:inline-flex; align-items:center; padding:8px 16px; border-radius:8px; font:inherit; font-size:13px; font-weight:500; cursor:pointer; border:1px solid transparent; transition:background .15s,color .15s; }
+  .modal-btn-cancel { background:var(--surface); color:var(--text-2); border-color:var(--border); }
+  .modal-btn-cancel:hover { background:var(--bg-soft); color:var(--text); }
+  .modal-btn-ok { background:var(--accent); color:var(--accent-fg-on); box-shadow:0 1px 0 rgba(255,255,255,.15) inset; }
+  .modal-btn-ok:hover { background:var(--accent-hover); }
+
   /* ---------- find bar ---------- */
   .find-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px 14px; background:var(--surface); border-bottom:1px solid var(--border); overflow:hidden; max-height:48px; opacity:1; transition:max-height .18s ease, opacity .18s ease, padding .18s ease, border-bottom-width .18s ease; }
   .find-bar:not(.open) { max-height:0; opacity:0; padding-top:0; padding-bottom:0; border-bottom-width:0; pointer-events:none; }
   .find-bar svg { flex:0 0 auto; width:13px; height:13px; color:var(--text-3); }
-  .find-bar input { flex:0 1 220px; padding:5px 10px; background:var(--bg-soft); border:1px solid var(--border); border-radius:7px; font:inherit; font-size:12.5px; color:var(--text); outline:none; transition:border-color .15s,box-shadow .15s; }
+  .find-bar input { flex:1 1 0; min-width:80px; max-width:320px; padding:5px 10px; background:var(--bg-soft); border:1px solid var(--border); border-radius:7px; font:inherit; font-size:12.5px; color:var(--text); outline:none; transition:border-color .15s,box-shadow .15s; }
   .find-bar input:focus { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 18%,transparent); }
   .find-bar input.no-match { border-color:#c0392b; background:color-mix(in oklab,#c0392b 10%,var(--bg-soft)); }
-  #find-count { font-size:12px; color:var(--text-3); min-width:64px; font-variant-numeric:tabular-nums; }
+  #find-count { font-size:12px; color:var(--text-3); min-width:64px; font-variant-numeric:tabular-nums; text-align:right; margin-left:auto; }
   .find-btn { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; background:transparent; border:1px solid var(--border); color:var(--text-2); cursor:pointer; font-size:11px; line-height:1; transition:background .12s,color .12s; }
   .find-btn:hover { background:var(--bg-soft); color:var(--text); }
   .ctx .item kbd { margin-left:auto; padding-left:10px; font-family:inherit; font-size:11px; color:var(--text-3); }
@@ -284,6 +304,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     <span id="ectx-mode-label">Edit file</span>
   </div>
+  <div class="item disabled" id="ectx-save">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Save changes<kbd>Ctrl+S</kbd>
+  </div>
   <div class="sep"></div>
   <div class="item" id="ectx-undo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13C5 8 9 5 14 5a9 9 0 0 1 9 9 9 9 0 0 1-9 9c-3 0-5.6-1.2-7.4-3.1"/></svg>
@@ -314,6 +338,19 @@
   <div class="item" id="ectx-goto">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
     Go to line…<kbd>Ctrl+G</kbd>
+  </div>
+</div>
+
+<!-- prompt modal -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal" id="modal-card">
+    <p class="modal-title" id="modal-title">Title</p>
+    <p class="modal-sub" id="modal-sub"></p>
+    <input class="modal-input" id="modal-input" type="text" autocomplete="off" spellcheck="false">
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" id="modal-cancel">Cancel</button>
+      <button class="modal-btn modal-btn-ok" id="modal-ok">OK</button>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -705,6 +742,86 @@ function selectRow(path, size) {
   }
 }
 
+/* ---- tree drag & drop ---- */
+let dragSrc = null;
+
+function clearTreeDropState() {
+  treeEl.querySelectorAll('.tree-drop-over').forEach(r => r.classList.remove('tree-drop-over'));
+  treeEl.querySelectorAll('.tree-dragging').forEach(r => r.classList.remove('tree-dragging'));
+}
+
+function isValidTreeDrop(srcPath, dstDir) {
+  if (!srcPath) return false;
+  if (srcPath === dstDir) return false;
+  if (dstDir !== '' && dstDir.startsWith(srcPath + '/')) return false;
+  if (dirname(srcPath) === dstDir) return false;
+  return true;
+}
+
+function movePath(srcPath, dstDir) {
+  api('/fs-move', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({src:srcPath, dst_dir:dstDir})})
+    .then(j => {
+      if (j.ok) {
+        const newBase = dstDir ? joinPath(dstDir, basename(srcPath)) : basename(srcPath);
+        Object.keys(tabs).forEach(id => {
+          const tp = tabs[id].path;
+          if (tp === srcPath || tp.startsWith(srcPath + '/')) {
+            const newPath = newBase + tp.slice(srcPath.length);
+            tabs[id].path = newPath;
+            const lbl = tabsBarEl.querySelector(`[data-tab-id="${id}"] .tab-label`);
+            if (lbl) lbl.textContent = basename(newPath);
+            if (activeTabId === id) { openedPath = newPath; pathEl.textContent = newPath; }
+          }
+        });
+        loadTree();
+        toast('Moved', basename(srcPath), 'ok');
+      } else toast('Error', j.error || 'Move failed', 'err');
+    })
+    .catch(e => toast('Error', e.message || 'Move failed', 'err'));
+}
+
+function bindDragSource(row, path, type) {
+  row.draggable = true;
+  row.addEventListener('dragstart', e => {
+    if (e.target.closest('input,button')) { e.preventDefault(); return; }
+    dragSrc = {path, type};
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-tree', path);
+    requestAnimationFrame(() => row.classList.add('tree-dragging'));
+  });
+  row.addEventListener('dragend', () => { dragSrc = null; clearTreeDropState(); });
+}
+
+function bindDropTarget(row, path, kidsUl) {
+  let dc = 0, dTimer = null;
+  row.addEventListener('dragenter', e => {
+    if (!dragSrc || !isValidTreeDrop(dragSrc.path, path)) return;
+    e.preventDefault(); dc++;
+    row.classList.add('tree-drop-over');
+    if (!dTimer && kidsUl && kidsUl.classList.contains('hidden')) {
+      dTimer = setTimeout(() => {
+        dTimer = null;
+        kidsUl.classList.remove('hidden'); row.classList.add('open'); expandedPaths.add(path);
+      }, 600);
+    }
+  });
+  row.addEventListener('dragover', e => {
+    if (!dragSrc || !isValidTreeDrop(dragSrc.path, path)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+  });
+  row.addEventListener('dragleave', () => {
+    dc = Math.max(0, dc - 1);
+    if (dc === 0) { row.classList.remove('tree-drop-over'); clearTimeout(dTimer); dTimer = null; }
+  });
+  row.addEventListener('drop', e => {
+    e.preventDefault(); dc = 0; clearTimeout(dTimer); dTimer = null;
+    row.classList.remove('tree-drop-over');
+    if (!dragSrc || !isValidTreeDrop(dragSrc.path, path)) return;
+    const src = dragSrc.path; dragSrc = null;
+    movePath(src, path);
+  });
+}
+
 /* ---- tree rendering ---- */
 function nodeRow(n, isDir) {
   const r = el('div', {className:'row '+(isDir?'folder':'file'), dataset:{path:n.path, type:isDir?'dir':'file'}});
@@ -747,12 +864,15 @@ function drawTree(data) {
         addBranch(kids, item.children || [], false);
         li.appendChild(kids);
         makeDropHandlers(item.path, row, true, kids);
+        bindDragSource(row, item.path, 'dir');
+        bindDropTarget(row, item.path, kids);
       } else {
         const row = nodeRow(item, false);
         row.addEventListener('click', () => openFile(item.path));
         row.addEventListener('dblclick', () => startInlineRename(item.path));
         li.appendChild(row);
         makeDropHandlers(item.path, row, false, null);
+        bindDragSource(row, item.path, 'file');
       }
       parent.appendChild(li);
     });
@@ -977,12 +1097,12 @@ ctxUpload.addEventListener('click',    () => {
   uploadInput.click(); hideCtx();
 });
 ctxRename.addEventListener('click',    () => { if (ctxTarget) startInlineRename(ctxTarget.path); hideCtx(); });
-ctxNewfolder.addEventListener('click', () => {
+ctxNewfolder.addEventListener('click', async () => {
   if (!ctxTarget) return;
   const base = ctxTarget.type === 'dir' ? ctxTarget.path : (ctxTarget.type === 'file' ? dirname(ctxTarget.path) : "");
-  const name = prompt('Folder name');
-  if (name && name.trim() && !name.includes('/')) createFolder(base, name.trim());
   hideCtx();
+  const name = await showPromptModal('New folder', 'Folder name…', base ? 'Inside: ' + base : 'At root');
+  if (name && !name.includes('/')) createFolder(base, name);
 });
 
 /* ---- editor context menu ---- */
@@ -994,6 +1114,7 @@ const ectxDuplicate = document.getElementById('ectx-duplicate');
 const ectxComment   = document.getElementById('ectx-comment');
 const ectxFind      = document.getElementById('ectx-find');
 const ectxGoto      = document.getElementById('ectx-goto');
+const ectxSave      = document.getElementById('ectx-save');
 const ectxUndo      = document.getElementById('ectx-undo');
 const ectxRedo      = document.getElementById('ectx-redo');
 const findBarEl     = document.getElementById('find-bar');
@@ -1008,7 +1129,9 @@ function showEditorCtx(x, y) {
   const editing = isEditMode();
   const hasFile = !!openedPath && !openedIsBinary && !openedIsImage;
   if (!hasFile) return;
+  const isDirty = !!(activeTabId && tabs[activeTabId]?.dirty);
   ectxModeLabel.textContent = editing ? 'View mode' : 'Edit file';
+  ectxSave.classList.toggle('disabled', !isDirty);
   ectxDuplicate.classList.toggle('disabled', !editing);
   ectxComment.classList.toggle('disabled', !editing);
   ectxGoto.classList.toggle('disabled', !editing);
@@ -1061,9 +1184,10 @@ function edToggleComment() {
   editor.dispatchEvent(new Event('input'));
 }
 
-function edGoToLine() {
+async function edGoToLine() {
   if (!isEditMode()) return;
-  const raw = prompt('Go to line:');
+  const totalLines = editor.value.split('\n').length;
+  const raw = await showPromptModal('Go to line', 'Line number…', '1 – ' + totalLines);
   if (!raw) return;
   const n = parseInt(raw, 10);
   if (!n || n < 1) return;
@@ -1177,6 +1301,7 @@ btnRedo.addEventListener('click', edRedo);
 
 /* context menu wiring */
 ectxMode.addEventListener('click',      () => { editToggle.click(); hideEditorCtx(); });
+ectxSave.addEventListener('click',      () => { saveFile();         hideEditorCtx(); });
 ectxUndo.addEventListener('click',      () => { edUndo();           hideEditorCtx(); });
 ectxRedo.addEventListener('click',      () => { edRedo();           hideEditorCtx(); });
 ectxSelectAll.addEventListener('click', () => { edSelectAll();       hideEditorCtx(); });
@@ -1201,7 +1326,59 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (findBarEl.classList.contains('open')) closeFind(); else openFind();
   }
+  if (ctrl && e.key === 's') {
+    e.preventDefault();
+    saveFile();
+  }
 });
+
+/* ---- prompt modal ---- */
+const modalOverlayEl = document.getElementById('modal-overlay');
+const modalTitleEl   = document.getElementById('modal-title');
+const modalSubEl     = document.getElementById('modal-sub');
+const modalInputEl   = document.getElementById('modal-input');
+const modalOkEl      = document.getElementById('modal-ok');
+const modalCancelEl  = document.getElementById('modal-cancel');
+
+function showPromptModal(title, placeholder, sub = '', defaultVal = '') {
+  return new Promise(resolve => {
+    modalTitleEl.textContent = title;
+    modalSubEl.textContent   = sub;
+    modalSubEl.style.display = sub ? '' : 'none';
+    modalInputEl.placeholder = placeholder;
+    modalInputEl.value       = defaultVal;
+    modalOkEl.textContent    = 'OK';
+    modalOverlayEl.classList.remove('hidden');
+    // Re-trigger animation on the card
+    const card = document.getElementById('modal-card');
+    card.style.animation = 'none';
+    requestAnimationFrame(() => { card.style.animation = ''; });
+    setTimeout(() => { modalInputEl.focus(); modalInputEl.select(); }, 30);
+
+    function finish(val) {
+      modalOverlayEl.classList.add('hidden');
+      cleanup();
+      resolve(val);
+    }
+    function onOk()     { finish(modalInputEl.value.trim() || null); }
+    function onCancel() { finish(null); }
+    function onKey(e) {
+      if (e.key === 'Enter')  { e.preventDefault(); onOk(); }
+      if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+    }
+    function onBackdrop(e) { if (e.target === modalOverlayEl) onCancel(); }
+    function cleanup() {
+      modalOkEl.removeEventListener('click', onOk);
+      modalCancelEl.removeEventListener('click', onCancel);
+      modalInputEl.removeEventListener('keydown', onKey);
+      modalOverlayEl.removeEventListener('click', onBackdrop);
+    }
+    modalOkEl.addEventListener('click', onOk);
+    modalCancelEl.addEventListener('click', onCancel);
+    modalInputEl.addEventListener('keydown', onKey);
+    modalOverlayEl.addEventListener('click', onBackdrop);
+  });
+}
 
 /* ---- tab persistence ---- */
 function saveTabs() {

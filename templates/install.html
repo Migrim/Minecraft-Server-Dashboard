@@ -172,8 +172,7 @@
     gap: 24px; padding: 26px 32px 22px; border-bottom: 1px solid var(--border);
   }
   .card-head h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
-  .card-head p { margin: 0; color: var(--text-3); font-size: 13.5px; max-width: 60ch; }
-  .card-head .head-actions { display: flex; gap: 10px; align-items: center; flex: 0 0 auto; }
+  .card-head p { margin: 0; color: var(--text-3); font-size: 13.5px; }
   .card-body { padding: 22px 32px 28px; }
 
   /* buttons */
@@ -271,6 +270,53 @@
   /* progress */
   .progress-wrap { display: none; width: 100%; margin-top: 16px; }
   .progress-wrap.visible { display: block; }
+
+  /* success state */
+  @keyframes success-in {
+    from { opacity: 0; transform: translateY(14px) scale(.97); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);   }
+  }
+  @keyframes check-pop {
+    0%   { transform: scale(.4);   opacity: 0; }
+    65%  { transform: scale(1.18); opacity: 1; }
+    100% { transform: scale(1);    opacity: 1; }
+  }
+  @keyframes check-draw {
+    from { stroke-dashoffset: 30; }
+    to   { stroke-dashoffset: 0;  }
+  }
+  .dz-success-state {
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 40px 24px; text-align: center;
+  }
+  .dz-success-state.visible {
+    display: flex;
+    animation: success-in .38s cubic-bezier(.21,1.02,.73,1) both;
+  }
+  .dz-ico--success {
+    width: 56px; height: 56px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--accent); display: flex; align-items: center; justify-content: center;
+  }
+  .dz-success-state.visible .dz-ico--success {
+    animation: check-pop .42s .12s cubic-bezier(.21,1.02,.73,1) both;
+  }
+  .dz-ico--success svg {
+    width: 26px; height: 26px;
+    stroke-dasharray: 24; stroke-dashoffset: 24;
+  }
+  .dz-success-state.visible .dz-ico--success svg {
+    animation: check-draw .32s .42s ease forwards;
+  }
+  .dz-success-state .dz-sub { margin: 0; }
+  .success-timer-bar {
+    width: 200px; height: 3px; background: var(--border);
+    border-radius: 999px; overflow: hidden; margin-top: 2px;
+  }
+  .success-timer-fill {
+    height: 100%; width: 100%; background: var(--accent);
+    border-radius: 999px; transition: width linear;
+  }
   .progress-bar {
     height: 6px; width: 100%; background: var(--border);
     border-radius: 999px; overflow: hidden;
@@ -468,13 +514,7 @@
           <div class="card-head">
             <div>
               <h1>Set up your Minecraft server</h1>
-              <p>Upload a single <span style="font-family:'JetBrains Mono',monospace;color:var(--accent)">server.jar</span> for vanilla, Paper, Spigot or Fabric — or upload an entire <span style="font-family:'JetBrains Mono',monospace;color:var(--accent)">Forge server folder</span> as a ZIP or by choosing the folder directly.</p>
-            </div>
-            <div class="head-actions">
-              <button class="btn btn-secondary" id="checkBtn" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                Check status
-              </button>
+              <p>Upload a single <span style="font-family:'JetBrains Mono',monospace;color:var(--accent)">server.jar</span> for vanilla, Paper, Spigot or Fabric — or use <b>Server Folder</b> to upload a complete modded server (Forge, NeoForge, etc.) as a ZIP or by choosing the folder directly.</p>
             </div>
           </div>
 
@@ -486,7 +526,7 @@
               </button>
               <button class="mode-tab" id="tabForge">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                Forge Folder
+                Server Folder
               </button>
             </div>
 
@@ -511,8 +551,6 @@
                 </div>
                 <div class="dz-foot">
                   <span><span class="k">.jar</span> only</span>
-                  <span class="dot"></span>
-                  <span>Max <span class="k">256 MB</span></span>
                   <span class="dot"></span>
                   <span>SHA-256 verified on upload</span>
                 </div>
@@ -540,6 +578,16 @@
                 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
                 <div class="progress-label" id="progressLabel">Uploading…</div>
               </div>
+
+              <div class="dz-success-state" id="jar-success">
+                <div class="dz-ico dz-ico--success" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <h2 class="dz-title">Upload complete!</h2>
+                <p class="dz-sub">Redirecting to dashboard in <strong id="jar-countdown">7</strong>…</p>
+                <div class="success-timer-bar"><div class="success-timer-fill" id="jar-timer-fill"></div></div>
+                <button class="btn btn-secondary" id="jar-cancel-btn" type="button">Cancel &amp; choose a different file</button>
+              </div>
             </div>
             </div><!-- /#jar-panel -->
 
@@ -552,8 +600,8 @@
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
                   </div>
-                  <h2 class="dz-title">Upload your <span style="color:var(--accent);font-size:inherit;margin:0">Forge</span> server folder</h2>
-                  <p class="dz-sub">Pick the folder directly — or compress it to a <span class="mono">.zip</span> and drop it here</p>
+                  <h2 class="dz-title">Upload your <span style="color:var(--accent);font-size:inherit;margin:0">server folder</span></h2>
+                  <p class="dz-sub">For modded servers (Forge, NeoForge, etc.) — pick the folder directly or compress it to a <span class="mono">.zip</span> and drop it here</p>
                   <div class="dz-actions" id="forge-dz-actions">
                     <label class="btn btn-primary" id="forge-folder-label" for="forge-folder-input">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -600,6 +648,16 @@
                   <div class="progress-bar"><div class="progress-fill" id="forge-progress-fill"></div></div>
                   <div class="progress-label" id="forge-progress-label">Uploading…</div>
                 </div>
+
+                <div class="dz-success-state" id="forge-success">
+                  <div class="dz-ico dz-ico--success" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <h2 class="dz-title">Upload complete!</h2>
+                  <p class="dz-sub">Redirecting to dashboard in <strong id="forge-countdown">7</strong>…</p>
+                  <div class="success-timer-bar"><div class="success-timer-fill" id="forge-timer-fill"></div></div>
+                  <button class="btn btn-secondary" id="forge-cancel-btn" type="button">Cancel &amp; choose a different file</button>
+                </div>
               </div>
             </div><!-- /#forge-panel -->
 
@@ -609,7 +667,7 @@
         <div class="below">
           <div class="l">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            After a successful upload you'll be redirected to <strong>the dashboard</strong>.
+            You can reinstall the server at any time in the<strong>Panel Settings</strong>
           </div>
           <div>
             <a href="https://one-auth.net/docs/MC-Dashboard#server-jar" target="_blank" rel="noopener">Where do I get a server.jar?</a>
@@ -777,10 +835,18 @@
   const progressWrap  = document.getElementById('progressWrap');
   const progressFill  = document.getElementById('progressFill');
   const progressLabel = document.getElementById('progressLabel');
+  const jarSuccess    = document.getElementById('jar-success');
+  const jarCountdown  = document.getElementById('jar-countdown');
+  const jarTimerFill  = document.getElementById('jar-timer-fill');
+  const jarCancelBtn  = document.getElementById('jar-cancel-btn');
   let selectedFile = null;
+  let jarRedirectTimer = null;
 
   function setFile(f) {
     selectedFile = f;
+    jarSuccess.classList.remove('visible');
+    progressWrap.classList.remove('visible');
+    uploadBtn.disabled = false;
     if (!f) {
       dzSelected.classList.remove('visible');
       dzDefault.style.display = '';
@@ -792,6 +858,31 @@
     dzDefault.style.display = 'none';
     dzSelected.classList.add('visible');
   }
+
+  function showJarSuccess() {
+    progressWrap.classList.remove('visible');
+    dzSelected.classList.remove('visible');
+    jarSuccess.classList.add('visible');
+    let secs = 7;
+    jarCountdown.textContent = secs;
+    jarTimerFill.style.transition = 'none';
+    jarTimerFill.style.width = '100%';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      jarTimerFill.style.transition = `width 7s linear`;
+      jarTimerFill.style.width = '0%';
+    }));
+    jarRedirectTimer = setInterval(() => {
+      secs--;
+      jarCountdown.textContent = secs;
+      if (secs <= 0) { clearInterval(jarRedirectTimer); location.href = '/'; }
+    }, 1000);
+  }
+
+  jarCancelBtn.addEventListener('click', () => {
+    clearInterval(jarRedirectTimer);
+    setFile(null);
+    fileInput.value = '';
+  });
 
   fileInput.addEventListener('change', e => setFile(e.target.files[0] || null));
 
@@ -816,10 +907,7 @@
         fillEl: progressFill, labelEl: progressLabel
       });
       progressFill.style.width = '100%';
-      progressLabel.textContent = 'Upload complete — redirecting…';
-      toast('Upload complete', 'Redirecting to dashboard', 'ok',
-            [{ label: 'Open now', onClick: () => location.href = '/' }], 5000);
-      setTimeout(() => location.href = '/', 5000);
+      showJarSuccess();
     } catch (e) {
       progressWrap.classList.remove('visible');
       uploadBtn.disabled = false;
@@ -840,10 +928,23 @@
   const forgeProgressWrap  = document.getElementById('forge-progress-wrap');
   const forgeProgressFill  = document.getElementById('forge-progress-fill');
   const forgeProgressLabel = document.getElementById('forge-progress-label');
+  const forgeSuccess       = document.getElementById('forge-success');
+  const forgeCountdown     = document.getElementById('forge-countdown');
+  const forgeTimerFill     = document.getElementById('forge-timer-fill');
+  const forgeCancelBtn     = document.getElementById('forge-cancel-btn');
   let forgeSelection = null; // { type: 'folder'|'zip', data: FileList|File }
+  let forgeRedirectTimer = null;
 
   function setForgeSelection(type, data) {
-    forgeSelection = { type, data };
+    forgeSelection = data ? { type, data } : null;
+    forgeSuccess.classList.remove('visible');
+    forgeProgressWrap.classList.remove('visible');
+    forgeUploadBtn.disabled = false;
+    if (!data) {
+      forgeDzSelected.classList.remove('visible');
+      forgeDzDefault.style.display = '';
+      return;
+    }
     let totalSize;
     if (type === 'folder') {
       const folderName = data[0]?.webkitRelativePath?.split('/')[0] || 'folder';
@@ -858,6 +959,32 @@
     forgeDzDefault.style.display = 'none';
     forgeDzSelected.classList.add('visible');
   }
+
+  function showForgeSuccess() {
+    forgeProgressWrap.classList.remove('visible');
+    forgeDzSelected.classList.remove('visible');
+    forgeSuccess.classList.add('visible');
+    let secs = 7;
+    forgeCountdown.textContent = secs;
+    forgeTimerFill.style.transition = 'none';
+    forgeTimerFill.style.width = '100%';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      forgeTimerFill.style.transition = `width 7s linear`;
+      forgeTimerFill.style.width = '0%';
+    }));
+    forgeRedirectTimer = setInterval(() => {
+      secs--;
+      forgeCountdown.textContent = secs;
+      if (secs <= 0) { clearInterval(forgeRedirectTimer); location.href = '/'; }
+    }, 1000);
+  }
+
+  forgeCancelBtn.addEventListener('click', () => {
+    clearInterval(forgeRedirectTimer);
+    setForgeSelection(null, null);
+    forgeFolderInput.value = '';
+    forgeZipInput.value = '';
+  });
 
   forgeFolderInput.addEventListener('change', e => {
     if (e.target.files.length > 0) setForgeSelection('folder', e.target.files);
@@ -935,27 +1062,12 @@
         if (lastErr) throw lastErr;
       }
       forgeProgressFill.style.width = '100%';
-      forgeProgressLabel.textContent = 'Upload complete — redirecting…';
-      toast('Upload complete', 'Redirecting to dashboard', 'ok',
-            [{ label: 'Open now', onClick: () => location.href = '/' }], 5000);
-      setTimeout(() => location.href = '/', 5000);
+      showForgeSuccess();
     } catch (e) {
       forgeProgressWrap.classList.remove('visible');
       forgeUploadBtn.disabled = false;
       toast('Upload failed', e.message || 'Please try again', 'err',
             [{ label: 'Retry', onClick: () => forgeUploadBtn.click() }]);
-    }
-  });
-
-  /* check status */
-  document.getElementById('checkBtn').addEventListener('click', async () => {
-    try {
-      const r = await fetch('/jar-status', { headers: { 'Accept': 'application/json' } });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const j = await r.json();
-      toast('Server Status', (j.status || 'Unknown').toString(), 'ok', [{ label: 'Open', onClick: () => window.open('/jar-status', '_blank') }]);
-    } catch (e) {
-      toast('Status Error', 'Could not fetch status', 'err', [{ label: 'Open', onClick: () => window.open('/jar-status', '_blank') }]);
     }
   });
 

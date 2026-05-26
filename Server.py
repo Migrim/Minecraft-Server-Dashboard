@@ -1305,6 +1305,34 @@ def fs_rename():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+@app.route("/fs-move", methods=["POST"])
+def fs_move():
+    data = request.get_json(force=True) or {}
+    src_rel  = (data.get("src")     or "").strip()
+    dst_rel  = (data.get("dst_dir") or "").strip()
+    if not src_rel:
+        return jsonify({"ok": False, "error": "missing src"}), 400
+    try:
+        abs_src = safe_join(src_rel)
+        abs_dst = safe_join(dst_rel) if dst_rel else os.path.abspath(server_root())
+        if not os.path.exists(abs_src):
+            return jsonify({"ok": False, "error": "source not found"}), 404
+        if not os.path.isdir(abs_dst):
+            return jsonify({"ok": False, "error": "destination is not a folder"}), 400
+        if abs_dst == abs_src or abs_dst.startswith(abs_src + os.sep):
+            return jsonify({"ok": False, "error": "cannot move folder into itself"}), 400
+        name = os.path.basename(abs_src.rstrip("/\\"))
+        target = os.path.join(abs_dst, name)
+        if os.path.exists(target):
+            return jsonify({"ok": False, "error": "a file with that name already exists in the destination"}), 409
+        shutil.move(abs_src, target)
+        new_rel = os.path.relpath(target, os.path.abspath(server_root())).replace("\\", "/")
+        return jsonify({"ok": True, "path": new_rel})
+    except ValueError:
+        return jsonify({"ok": False, "error": "invalid path"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route("/fs-mkdir", methods=["POST"])
 def fs_mkdir():
     data = request.get_json(force=True) or {}

@@ -71,7 +71,9 @@
   .ed-tab { display:inline-flex; align-items:center; gap:8px; padding:11px 14px 11px 16px; background:var(--surface-2); color:var(--text-3); border-right:1px solid var(--border); cursor:pointer; font-size:13px; font-weight:500; white-space:nowrap; position:relative; }
   .ed-tab.active { background:var(--surface); color:var(--text); }
   .ed-tab.active::before { content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px; background:var(--accent); }
-  .ed-tab .dot { width:6px; height:6px; border-radius:99px; background:var(--accent); flex:0 0 6px; }
+  .ed-tab .dot { width:6px; height:6px; border-radius:99px; background:var(--accent); flex:0 0 6px; transition:background .15s, width .15s, height .15s; }
+  .ed-tab .dot.dirty { background:none; border-radius:0; width:13px; height:13px; flex:0 0 13px; display:flex; align-items:center; justify-content:center; animation:warnIn .22s cubic-bezier(.34,1.56,.64,1) forwards; }
+  @keyframes warnIn { 0%{transform:scale(.4);opacity:0} 65%{transform:scale(1.2);opacity:1} 100%{transform:scale(1);opacity:1} }
   .close-tab { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; color:var(--text-3); cursor:pointer; border:none; background:none; padding:0; }
   .close-tab:hover { background:var(--bg-soft); color:var(--text); }
   .close-tab svg { width:11px; height:11px; }
@@ -103,11 +105,17 @@
   .edit-toggle:hover { background:var(--surface-2); color:var(--text); }
   .edit-toggle.active { background:var(--accent-soft); border-color:color-mix(in oklab,var(--accent) 30%,transparent); color:var(--accent); }
   .edit-toggle svg { width:12px; height:12px; }
-  textarea#editor { flex:1 1 auto; min-height:0; background:var(--editor-bg); color:var(--editor-fg); border:none; outline:none; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:13px; line-height:1.7; padding:18px 20px; resize:none; width:100%; transition:background .25s,color .25s; }
+  .ed-edit-wrap { flex:1 1 auto; min-height:0; display:flex; overflow:hidden; background:var(--editor-bg); transition:background .25s; }
+  .ed-edit-wrap .gutter { flex:0 0 52px; width:52px; position:static; overflow:hidden; }
+  textarea#editor { flex:1 1 auto; min-height:0; background:var(--editor-bg); color:var(--editor-fg); border:none; outline:none; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:13px; line-height:1.7; padding:18px 20px; resize:none; width:0; overflow-y:auto; transition:background .25s,color .25s; }
   textarea#editor::placeholder { color:var(--editor-gutter); }
   textarea#editor::-webkit-scrollbar { width:10px; }
   textarea#editor::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:999px; }
   #imgview { max-width:100%; max-height:100%; object-fit:contain; transform-origin:center center; }
+  .no-preview { flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--text-3); padding:40px; }
+  .no-preview svg { width:40px; height:40px; opacity:.4; }
+  .no-preview span { font-size:14px; font-weight:500; color:var(--text-2); }
+  .no-preview small { font-size:12.5px; color:var(--text-3); text-align:center; max-width:300px; line-height:1.5; }
   .ed-status { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:7px 16px; border-top:1px solid var(--border); background:var(--surface); font-size:11.5px; color:var(--text-3); font-family:'JetBrains Mono',ui-monospace,monospace; }
   .ed-status .right { display:flex; align-items:center; gap:14px; }
 
@@ -120,6 +128,20 @@
   .ctx .sep { height:1px; background:var(--border); margin:4px 2px; }
 
   .hidden { display:none !important; }
+
+  /* ---------- find bar ---------- */
+  .find-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px 14px; background:var(--surface); border-bottom:1px solid var(--border); overflow:hidden; max-height:48px; opacity:1; transition:max-height .18s ease, opacity .18s ease, padding .18s ease, border-bottom-width .18s ease; }
+  .find-bar:not(.open) { max-height:0; opacity:0; padding-top:0; padding-bottom:0; border-bottom-width:0; pointer-events:none; }
+  .find-bar svg { flex:0 0 auto; width:13px; height:13px; color:var(--text-3); }
+  .find-bar input { flex:0 1 220px; padding:5px 10px; background:var(--bg-soft); border:1px solid var(--border); border-radius:7px; font:inherit; font-size:12.5px; color:var(--text); outline:none; transition:border-color .15s,box-shadow .15s; }
+  .find-bar input:focus { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 18%,transparent); }
+  .find-bar input.no-match { border-color:#c0392b; background:color-mix(in oklab,#c0392b 10%,var(--bg-soft)); }
+  #find-count { font-size:12px; color:var(--text-3); min-width:64px; font-variant-numeric:tabular-nums; }
+  .find-btn { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; background:transparent; border:1px solid var(--border); color:var(--text-2); cursor:pointer; font-size:11px; line-height:1; transition:background .12s,color .12s; }
+  .find-btn:hover { background:var(--bg-soft); color:var(--text); }
+  .ctx .item kbd { margin-left:auto; padding-left:10px; font-family:inherit; font-size:11px; color:var(--text-3); }
+  mark.find-mark { background:#ffc107; color:#1a1a1a; border-radius:2px; padding:0 1px; }
+  [data-theme="dark"] mark.find-mark { background:#d97706; color:#fff; }
 </style>
 {% endblock %}
 
@@ -141,7 +163,7 @@
         </button>
         <button class="btn btn-secondary" id="download">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Download
+          Download<span id="dl-size" style="font-size:11.5px;opacity:.7;font-weight:400"></span>
         </button>
         <button class="btn btn-primary" id="save">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -173,6 +195,14 @@
           <span id="meta"></span>
         </div>
         <div class="right">
+          <button class="edit-toggle hidden" id="btn-undo" title="Undo (Ctrl+Z)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13C5 8 9 5 14 5a9 9 0 0 1 9 9 9 9 0 0 1-9 9c-3 0-5.6-1.2-7.4-3.1"/></svg>
+            Undo
+          </button>
+          <button class="edit-toggle hidden" id="btn-redo" title="Redo (Ctrl+Y)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13C19 8 15 5 10 5a9 9 0 0 0-9 9 9 9 0 0 0 9 9c3 0 5.6-1.2 7.4-3.1"/></svg>
+            Redo
+          </button>
           <input id="zoom" class="zoom hidden" type="range" min="25" max="400" value="100" step="1">
           <button class="edit-toggle hidden" id="edit-toggle">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -180,13 +210,29 @@
           </button>
         </div>
       </div>
+      <div class="find-bar" id="find-bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="find-input" type="text" placeholder="Find…" autocomplete="off" spellcheck="false">
+        <span id="find-count"></span>
+        <button class="find-btn" id="find-prev" title="Previous (Shift+Enter)">↑</button>
+        <button class="find-btn" id="find-next" title="Next (Enter)">↓</button>
+        <button class="find-btn" id="find-close" title="Close (Esc)">✕</button>
+      </div>
       <div class="editor-body" id="editor-area">
         <div class="ed-view-grid" id="ed-view-grid">
           <div class="gutter" id="gutter"></div>
           <div class="code-view" id="code-view"></div>
         </div>
+        <div class="ed-edit-wrap hidden" id="ed-edit-wrap">
+          <div class="gutter" id="edit-gutter"></div>
+          <textarea id="editor" spellcheck="false" placeholder="Select a file to edit…"></textarea>
+        </div>
         <img id="imgview" class="hidden" alt="preview">
-        <textarea id="editor" class="hidden" spellcheck="false" placeholder="Select a file to edit…"></textarea>
+        <div class="no-preview hidden" id="no-preview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>
+          <span>No preview available</span>
+          <small>This file type cannot be displayed — use the Download button to edit it locally.</small>
+        </div>
       </div>
       <div class="ed-status">
         <span id="ed-lang">Plain text</span>
@@ -213,7 +259,7 @@
   </div>
   <div class="item" id="ctx-download">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    Download
+    <span id="ctx-download-label">Download</span>
   </div>
   <div class="sep"></div>
   <div class="item" id="ctx-upload">
@@ -233,11 +279,49 @@
     Delete
   </div>
 </div>
+<div class="ctx" id="editor-ctx">
+  <div class="item" id="ectx-mode">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    <span id="ectx-mode-label">Edit file</span>
+  </div>
+  <div class="sep"></div>
+  <div class="item" id="ectx-undo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13C5 8 9 5 14 5a9 9 0 0 1 9 9 9 9 0 0 1-9 9c-3 0-5.6-1.2-7.4-3.1"/></svg>
+    Undo<kbd>Ctrl+Z</kbd>
+  </div>
+  <div class="item" id="ectx-redo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13C19 8 15 5 10 5a9 9 0 0 0-9 9 9 9 0 0 0 9 9c3 0 5.6-1.2 7.4-3.1"/></svg>
+    Redo<kbd>Ctrl+Y</kbd>
+  </div>
+  <div class="sep"></div>
+  <div class="item" id="ectx-select-all">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    Select all<kbd>Ctrl+A</kbd>
+  </div>
+  <div class="item" id="ectx-duplicate">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    Duplicate line<kbd>Ctrl+D</kbd>
+  </div>
+  <div class="item" id="ectx-comment">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="6" x2="3" y2="6"/><line x1="15" y1="12" x2="3" y2="12"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+    Toggle comment<kbd>Ctrl+/</kbd>
+  </div>
+  <div class="sep"></div>
+  <div class="item" id="ectx-find">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    Find<kbd>Ctrl+F</kbd>
+  </div>
+  <div class="item" id="ectx-goto">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+    Go to line…<kbd>Ctrl+G</kbd>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 /* ---- icon constants ---- */
+const DIRTY_SVG  = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.1 2.4L1.5 12a1 1 0 0 0 .9 1.5h11.2a1 1 0 0 0 .9-1.5L8.9 2.4a1 1 0 0 0-1.8 0z"/><line x1="8" y1="6.5" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r=".5" fill="#f59e0b"/></svg>';
 const CHEV_SVG   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 const FOLDER_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
 function fileIconSvg(name) {
@@ -334,17 +418,29 @@ function renderViewMode(content, path) {
   gutterEl.innerHTML = lines.map((_, i) => `<span>${i+1}</span>`).join('');
   codeViewEl.innerHTML = highlight(content||'', path);
   viewGrid.classList.remove('hidden');
-  editor.classList.add('hidden');
+  edEditWrap.classList.add('hidden');
+  noPreviewEl.classList.add('hidden');
   editToggle.classList.remove('active');
   editToggle.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit`;
+  btnUndo.classList.add('hidden');
+  btnRedo.classList.add('hidden');
+}
+
+function syncEditGutter() {
+  const count = editor.value.split('\n').length;
+  editGutterEl.innerHTML = Array.from({length:count}, (_,i) => `<span>${i+1}</span>`).join('');
+  editGutterEl.scrollTop = editor.scrollTop;
 }
 
 function enterEditMode(content) {
   editor.value = content;
   viewGrid.classList.add('hidden');
-  editor.classList.remove('hidden');
+  edEditWrap.classList.remove('hidden');
+  syncEditGutter();
   editToggle.classList.add('active');
   editToggle.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View`;
+  btnUndo.classList.remove('hidden');
+  btnRedo.classList.remove('hidden');
   editor.focus();
 }
 
@@ -386,6 +482,9 @@ const viewGrid     = document.getElementById('ed-view-grid');
 const gutterEl     = document.getElementById('gutter');
 const codeViewEl   = document.getElementById('code-view');
 const editToggle   = document.getElementById('edit-toggle');
+const edEditWrap   = document.getElementById('ed-edit-wrap');
+const editGutterEl = document.getElementById('edit-gutter');
+const noPreviewEl  = document.getElementById('no-preview');
 const tabsBarEl    = document.getElementById('editor-tabs');
 const tabsEmptyEl  = document.getElementById('tabs-empty');
 const edLang       = document.getElementById('ed-lang');
@@ -403,6 +502,17 @@ let expandedPaths = new Set();
 let tabs = {};      // tabId → {path, content, binary, image, scrollPos, meta}
 let activeTabId = null;
 let tabSeq = 0;
+
+function setTabDirty(tabId, isDirty) {
+  if (!tabs[tabId]) return;
+  tabs[tabId].dirty = isDirty;
+  const tabEl = tabsBarEl.querySelector(`[data-tab-id="${tabId}"]`);
+  if (!tabEl) return;
+  const dot = tabEl.querySelector('.dot');
+  if (!dot) return;
+  if (isDirty) { dot.classList.add('dirty'); dot.innerHTML = DIRTY_SVG; dot.title = 'Unsaved changes'; }
+  else          { dot.classList.remove('dirty'); dot.innerHTML = ''; dot.title = ''; }
+}
 
 function makeTabEl(id, label) {
   const t = document.createElement('div');
@@ -428,12 +538,12 @@ function switchToTab(id) {
   imgView.classList.toggle('hidden', !t.image);
   editToggle.classList.toggle('hidden', t.image || t.binary);
   if (t.image) {
-    viewGrid.classList.add('hidden'); editor.classList.add('hidden');
+    viewGrid.classList.add('hidden'); edEditWrap.classList.add('hidden'); noPreviewEl.classList.add('hidden');
     imgView.src='/fs-raw?path='+encodeURIComponent(t.path)+'&t='+Date.now();
     zoomEl.classList.remove('hidden');
   } else if (t.binary) {
-    viewGrid.classList.add('hidden'); editor.classList.add('hidden');
-    imgView.removeAttribute('src'); zoomEl.classList.add('hidden');
+    viewGrid.classList.add('hidden'); edEditWrap.classList.add('hidden');
+    imgView.removeAttribute('src'); zoomEl.classList.add('hidden'); noPreviewEl.classList.remove('hidden');
   } else {
     imgView.removeAttribute('src'); zoomEl.classList.add('hidden');
     renderViewMode(t.content, t.path);
@@ -444,6 +554,8 @@ function switchToTab(id) {
   edLines.textContent = (t.image||t.binary) ? '—' : (editor.value.split('\n').length+' lines');
   deselectRows();
   selectRow(t.path, t.size);
+  setTabDirty(id, t.dirty || false);
+  saveTabs();
 }
 
 function closeTab(id) {
@@ -452,10 +564,11 @@ function closeTab(id) {
   if (activeTabId === id) {
     activeTabId = null;
     openedPath = null; editor.value=''; editor.disabled=false;
-    imgView.classList.add('hidden'); editor.classList.add('hidden');
+    imgView.classList.add('hidden'); edEditWrap.classList.add('hidden'); noPreviewEl.classList.add('hidden');
     viewGrid.classList.remove('hidden'); codeViewEl.innerHTML=''; gutterEl.innerHTML='';
     editorArea.classList.remove('image-mode'); zoomEl.classList.add('hidden');
     editToggle.classList.add('hidden'); editToggle.classList.remove('active');
+    btnUndo.classList.add('hidden'); btnRedo.classList.add('hidden');
     pathEl.textContent='Select a file to edit'; metaEl.textContent='';
     edLang.textContent='Plain text'; edLines.textContent='—';
     deselectRows();
@@ -463,6 +576,7 @@ function closeTab(id) {
     if (rest.length) switchToTab(rest[rest.length-1]);
   }
   tabsEmptyEl.style.display = Object.keys(tabs).length ? 'none' : '';
+  saveTabs();
 }
 
 function openFileInTab(path, forceNew) {
@@ -473,6 +587,7 @@ function openFileInTab(path, forceNew) {
   if (!forceNew && activeTabId && tabs[activeTabId]) {
     tabId = activeTabId;
     tabs[tabId].path = path; tabs[tabId].scrollPos = 0;
+    setTabDirty(tabId, false);
     tabsBarEl.querySelector(`[data-tab-id="${tabId}"] .tab-label`).textContent = basename(path);
     editor.value=''; pathEl.textContent=path; metaEl.textContent='';
     setCwd(dirname(path)); edLang.textContent=extLang(path); edLines.textContent='—';
@@ -480,7 +595,7 @@ function openFileInTab(path, forceNew) {
     selectRow(path, null);
   } else {
     tabId = 'tab-'+(++tabSeq);
-    tabs[tabId] = {path, content:'', binary:false, image:false, scrollPos:0, meta:''};
+    tabs[tabId] = {path, content:'', binary:false, image:false, scrollPos:0, meta:'', dirty:false};
     const tabEl = makeTabEl(tabId, basename(path));
     tabsBarEl.insertBefore(tabEl, tabsEmptyEl);
     tabsEmptyEl.style.display = 'none';
@@ -489,12 +604,14 @@ function openFileInTab(path, forceNew) {
     if (activeTabId && tabs[activeTabId]) tabs[activeTabId].scrollPos = editor.scrollTop;
     activeTabId = tabId; openedPath = path;
     editor.value=''; editor.disabled=false;
-    imgView.classList.add('hidden'); editor.classList.remove('hidden');
+    imgView.classList.add('hidden'); edEditWrap.classList.add('hidden');
+    viewGrid.classList.remove('hidden');
     editorArea.classList.remove('image-mode'); zoomEl.classList.add('hidden');
     pathEl.textContent=path; metaEl.textContent='';
     setCwd(dirname(path)); edLang.textContent=extLang(path); edLines.textContent='—';
     deselectRows();
     selectRow(path, null);
+    saveTabs();
   }
 
   api('/fs-open', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path})})
@@ -504,28 +621,28 @@ function openFileInTab(path, forceNew) {
       const isImg = /(\.png|\.jpg|\.jpeg)$/.test(lower);
       const isBin = isImg || !!j.binary;
       const meta  = [j.size?humanSize(j.size):'', j.mtime?'Modified '+j.mtime:''].filter(Boolean).join('  ·  ');
-      tabs[tabId] = {...tabs[tabId], content:isBin?'':(j.content||''), binary:isBin, image:isImg, meta, size:j.size};
+      tabs[tabId] = {...tabs[tabId], content:isBin?'':(j.content||''), binary:isBin, image:isImg, meta, size:j.size, dirty:false};
+      setTabDirty(tabId, false);
       if (activeTabId !== tabId) return;
       openedPath=path; openedIsBinary=isBin; openedIsImage=isImg;
       editorArea.classList.toggle('image-mode', isImg);
       imgView.classList.toggle('hidden', !isImg);
       editToggle.classList.toggle('hidden', isImg || isBin);
       if (isImg) {
-        viewGrid.classList.add('hidden'); editor.classList.add('hidden');
+        viewGrid.classList.add('hidden'); edEditWrap.classList.add('hidden'); noPreviewEl.classList.add('hidden');
         imgView.src='/fs-raw?path='+encodeURIComponent(path)+'&t='+Date.now();
         zoomEl.classList.remove('hidden');
         imgView.style.transform='scale('+(Number(zoomEl.value||'100')/100)+')';
       } else if (isBin) {
-        viewGrid.classList.add('hidden'); editor.classList.add('hidden');
-        zoomEl.classList.add('hidden');
+        viewGrid.classList.add('hidden'); edEditWrap.classList.add('hidden');
+        zoomEl.classList.add('hidden'); noPreviewEl.classList.remove('hidden');
       } else {
-        zoomEl.classList.add('hidden');
+        zoomEl.classList.add('hidden'); noPreviewEl.classList.add('hidden');
         renderViewMode(tabs[tabId].content, path);
       }
       metaEl.textContent=meta; edLang.textContent=extLang(path);
       edLines.textContent=(isImg||isBin)?'—':(tabs[tabId].content.split('\n').length+' lines');
       if (activeTabId === tabId) selectRow(path, j.size);
-      if (isBin && !isImg) toast('Binary file','Download is available','ok');
     })
     .catch(err => { closeTab(tabId); toast('Error', err.message||'Failed to open file','err'); });
 }
@@ -553,8 +670,16 @@ function selectDir(path) { setCwd(path || ""); }
 function humanSize(n) {
   if (!n && n !== 0) return '';
   if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1024 / 1024).toFixed(1) + ' MB';
+  if (n < 1024 * 1024) {
+    const kb = n / 1024;
+    return (kb < 10 ? kb.toFixed(1) : Math.round(kb)) + ' KB';
+  }
+  if (n < 1024 * 1024 * 1024) {
+    const mb = n / 1024 / 1024;
+    return (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + ' MB';
+  }
+  const gb = n / 1024 / 1024 / 1024;
+  return (gb < 10 ? gb.toFixed(2) : gb.toFixed(1)) + ' GB';
 }
 
 function deselectRows() {
@@ -563,14 +688,20 @@ function deselectRows() {
     const m = r.querySelector('.meta'); if (m) m.textContent = '';
   });
   treeEl.querySelectorAll('.row.folder.selected').forEach(r => r.classList.remove('selected'));
+  const dlSizeEl = document.getElementById('dl-size');
+  if (dlSizeEl) dlSizeEl.textContent = '';
 }
 
 function selectRow(path, size) {
   const row = treeEl.querySelector(`.row[data-path="${CSS.escape(path)}"]`);
   if (!row) return;
   row.classList.add('selected');
+  const dlSizeEl = document.getElementById('dl-size');
   if (size && row.dataset.type === 'file') {
     const m = row.querySelector('.meta'); if (m) m.textContent = humanSize(size);
+    if (dlSizeEl) dlSizeEl.textContent = ' · ' + humanSize(size);
+  } else if (dlSizeEl && !size) {
+    dlSizeEl.textContent = '';
   }
 }
 
@@ -646,7 +777,7 @@ function filterTree() {
 
 function loadTree() {
   const scroll = treeEl.scrollTop;
-  api('/fs-tree')
+  return api('/fs-tree')
     .then(j => { fullTree = j.tree; drawTree(fullTree); treeEl.scrollTop = scroll; })
     .catch(err => toast('Error', err.message || 'Failed to load file tree', 'err'));
 }
@@ -716,7 +847,7 @@ function openFile(path) { openFileInTab(path, false); }
 function saveFile() {
   if (!openedPath)    { toast('No file', 'Select a file first', 'err'); return; }
   if (openedIsBinary) { toast('Not editable', 'Binary file', 'err'); return; }
-  const content = editor.classList.contains('hidden')
+  const content = edEditWrap.classList.contains('hidden')
     ? (activeTabId && tabs[activeTabId] ? tabs[activeTabId].content : '')
     : editor.value;
   if (activeTabId && tabs[activeTabId]) tabs[activeTabId].content = content;
@@ -725,7 +856,8 @@ function saveFile() {
     .then(j => {
       if (j.ok) {
         toast('Saved', 'File saved', 'ok');
-        if (!editor.classList.contains('hidden')) renderViewMode(content, openedPath);
+        setTabDirty(activeTabId, false);
+        if (!edEditWrap.classList.contains('hidden')) renderViewMode(content, openedPath);
       } else toast('Error', j.error||'Save failed', 'err');
     })
     .catch(() => toast('Error', 'Save failed', 'err'));
@@ -786,7 +918,7 @@ zoomEl.addEventListener('input', () => {
 /* ---- edit toggle ---- */
 editToggle.addEventListener('click', () => {
   if (!openedPath || openedIsBinary || openedIsImage) return;
-  if (editor.classList.contains('hidden')) {
+  if (edEditWrap.classList.contains('hidden')) {
     if (activeTabId && tabs[activeTabId]) enterEditMode(tabs[activeTabId].content);
   } else {
     if (activeTabId && tabs[activeTabId]) {
@@ -800,6 +932,15 @@ codeViewEl.addEventListener('dblclick', () => {
   if (openedPath && !openedIsBinary && !openedIsImage && activeTabId && tabs[activeTabId])
     enterEditMode(tabs[activeTabId].content);
 });
+editor.addEventListener('scroll', () => { editGutterEl.scrollTop = editor.scrollTop; });
+editor.addEventListener('input', () => {
+  syncEditGutter();
+  if (activeTabId && tabs[activeTabId]) {
+    tabs[activeTabId].content = editor.value;
+    edLines.textContent = editor.value.split('\n').length + ' lines';
+    setTabDirty(activeTabId, true);
+  }
+});
 
 /* ---- context menu ---- */
 function showCtx(x, y, p, t) {
@@ -808,7 +949,8 @@ function showCtx(x, y, p, t) {
   const cr = ctx.getBoundingClientRect();
   ctx.style.left = Math.min(x, window.innerWidth  - cr.width  - 8) + 'px';
   ctx.style.top  = Math.min(y, window.innerHeight - cr.height - 8) + 'px';
-  ctxDownload.classList.toggle('disabled', t !== 'file');
+  ctxDownload.classList.toggle('disabled', t !== 'file' && t !== 'dir');
+  document.getElementById('ctx-download-label').textContent = t === 'dir' ? 'Download as .zip' : 'Download';
   ctxOpen.classList.toggle('disabled', t !== 'file');
   ctxNewTab.classList.toggle('disabled', t !== 'file');
   ctxRename.classList.toggle('disabled', !p || t === 'root');
@@ -843,6 +985,248 @@ ctxNewfolder.addEventListener('click', () => {
   hideCtx();
 });
 
+/* ---- editor context menu ---- */
+const editorCtx     = document.getElementById('editor-ctx');
+const ectxMode      = document.getElementById('ectx-mode');
+const ectxModeLabel = document.getElementById('ectx-mode-label');
+const ectxSelectAll = document.getElementById('ectx-select-all');
+const ectxDuplicate = document.getElementById('ectx-duplicate');
+const ectxComment   = document.getElementById('ectx-comment');
+const ectxFind      = document.getElementById('ectx-find');
+const ectxGoto      = document.getElementById('ectx-goto');
+const ectxUndo      = document.getElementById('ectx-undo');
+const ectxRedo      = document.getElementById('ectx-redo');
+const findBarEl     = document.getElementById('find-bar');
+const findInputEl   = document.getElementById('find-input');
+const findCountEl   = document.getElementById('find-count');
+const btnUndo       = document.getElementById('btn-undo');
+const btnRedo       = document.getElementById('btn-redo');
+
+function isEditMode() { return !edEditWrap.classList.contains('hidden'); }
+
+function showEditorCtx(x, y) {
+  const editing = isEditMode();
+  const hasFile = !!openedPath && !openedIsBinary && !openedIsImage;
+  if (!hasFile) return;
+  ectxModeLabel.textContent = editing ? 'View mode' : 'Edit file';
+  ectxDuplicate.classList.toggle('disabled', !editing);
+  ectxComment.classList.toggle('disabled', !editing);
+  ectxGoto.classList.toggle('disabled', !editing);
+  ectxUndo.classList.toggle('disabled', !editing);
+  ectxRedo.classList.toggle('disabled', !editing);
+  editorCtx.style.display = 'block';
+  const cr = editorCtx.getBoundingClientRect();
+  editorCtx.style.left = Math.min(x, window.innerWidth  - cr.width  - 8) + 'px';
+  editorCtx.style.top  = Math.min(y, window.innerHeight - cr.height - 8) + 'px';
+}
+function hideEditorCtx() { editorCtx.style.display = 'none'; }
+
+[edEditWrap, viewGrid].forEach(el => {
+  el.addEventListener('contextmenu', e => { e.preventDefault(); hideCtx(); showEditorCtx(e.clientX, e.clientY); });
+});
+document.addEventListener('click', e => { if (!editorCtx.contains(e.target)) hideEditorCtx(); });
+
+/* editing actions */
+function edSelectAll() {
+  if (isEditMode()) { editor.focus(); editor.setSelectionRange(0, editor.value.length); }
+  else { const r = document.createRange(); r.selectNodeContents(codeViewEl); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+}
+
+function edDuplicateLine() {
+  if (!isEditMode()) return;
+  const val = editor.value, s = editor.selectionStart, e2 = editor.selectionEnd;
+  const ls = val.lastIndexOf('\n', s - 1) + 1;
+  const le = val.indexOf('\n', e2);
+  const end = le === -1 ? val.length : le;
+  const line = val.slice(ls, end);
+  const ins = val.slice(0, end) + '\n' + line + val.slice(end);
+  editor.value = ins;
+  const off = end - ls + 1;
+  editor.setSelectionRange(s + off, e2 + off);
+  editor.dispatchEvent(new Event('input'));
+}
+
+function edToggleComment() {
+  if (!isEditMode()) return;
+  const val = editor.value, s = editor.selectionStart, e2 = editor.selectionEnd;
+  const ls = val.lastIndexOf('\n', s - 1) + 1;
+  const le = val.indexOf('\n', e2 > 0 ? e2 - 1 : 0);
+  const end = le === -1 ? val.length : le;
+  const block = val.slice(ls, end);
+  const lines = block.split('\n');
+  const allCommented = lines.every(l => /^#/.test(l));
+  const toggled = lines.map(l => allCommented ? l.replace(/^#\s?/, '') : '# ' + l).join('\n');
+  editor.value = val.slice(0, ls) + toggled + val.slice(end);
+  editor.setSelectionRange(ls, ls + toggled.length);
+  editor.dispatchEvent(new Event('input'));
+}
+
+function edGoToLine() {
+  if (!isEditMode()) return;
+  const raw = prompt('Go to line:');
+  if (!raw) return;
+  const n = parseInt(raw, 10);
+  if (!n || n < 1) return;
+  const lines = editor.value.split('\n');
+  const target = Math.min(n, lines.length) - 1;
+  let offset = 0;
+  for (let i = 0; i < target; i++) offset += lines[i].length + 1;
+  editor.focus();
+  editor.setSelectionRange(offset, offset + lines[target].length);
+  const lh = parseFloat(getComputedStyle(editor).lineHeight) || 22;
+  editor.scrollTop = Math.max(0, target * lh - editor.clientHeight / 3);
+}
+
+/* find bar */
+let findMatches = [], findIdx = 0;
+
+function openFind() {
+  if (!openedPath || openedIsBinary || openedIsImage) return;
+  findBarEl.classList.add('open');
+  findInputEl.value = '';
+  findCountEl.textContent = '';
+  findInputEl.classList.remove('no-match');
+  findMatches = []; findIdx = 0;
+  findInputEl.focus();
+}
+function clearViewHighlight() {
+  codeViewEl.querySelectorAll('mark.find-mark').forEach(m => m.replaceWith(document.createTextNode(m.textContent)));
+}
+
+function highlightViewMatch(pos, q) {
+  clearViewHighlight();
+  if (pos < 0 || !q) return;
+  const walker = document.createTreeWalker(codeViewEl, NodeFilter.SHOW_TEXT);
+  let offset = 0, node;
+  while ((node = walker.nextNode())) {
+    const len = node.textContent.length;
+    if (offset + len > pos) {
+      const start = pos - offset;
+      if (start + q.length <= len) {
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, start + q.length);
+        const mark = document.createElement('mark');
+        mark.className = 'find-mark';
+        try { range.surroundContents(mark); } catch(e) {}
+      }
+      break;
+    }
+    offset += len;
+  }
+}
+
+function closeFind() {
+  findBarEl.classList.remove('open');
+  clearViewHighlight();
+  findMatches = []; findIdx = 0;
+}
+function runFind(dir) {
+  const q = findInputEl.value;
+  if (!q) {
+    findCountEl.textContent = ''; findMatches = []; findInputEl.classList.remove('no-match');
+    clearViewHighlight(); return;
+  }
+  const content = isEditMode() ? editor.value : (activeTabId && tabs[activeTabId] ? tabs[activeTabId].content : '');
+  const ql = q.toLowerCase(), cl = content.toLowerCase();
+  findMatches = [];
+  for (let i = 0; (i = cl.indexOf(ql, i)) !== -1; i += q.length) findMatches.push(i);
+  findInputEl.classList.toggle('no-match', !findMatches.length);
+  if (!findMatches.length) { findCountEl.textContent = 'No results'; clearViewHighlight(); return; }
+  if (dir === 'next') findIdx = (findIdx + 1) % findMatches.length;
+  else if (dir === 'prev') findIdx = (findIdx - 1 + findMatches.length) % findMatches.length;
+  else { findIdx = 0; }
+  findCountEl.textContent = `${findIdx + 1} / ${findMatches.length}`;
+  const pos = findMatches[findIdx];
+  const lh = 22;
+  const linesBefore = content.slice(0, pos).split('\n').length - 1;
+  if (isEditMode()) {
+    if (dir !== 'stay') {
+      editor.focus();
+      editor.setSelectionRange(pos, pos + q.length);
+      editor.scrollTop = Math.max(0, linesBefore * lh - editor.clientHeight / 3);
+    }
+  } else {
+    highlightViewMatch(pos, q);
+    if (dir !== 'stay') viewGrid.scrollTop = Math.max(0, linesBefore * lh - viewGrid.clientHeight / 3);
+  }
+}
+
+findInputEl.addEventListener('input', () => runFind('stay'));
+findInputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter')  { e.preventDefault(); runFind(e.shiftKey ? 'prev' : 'next'); }
+  if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+});
+document.getElementById('find-prev').addEventListener('click', () => runFind('prev'));
+document.getElementById('find-next').addEventListener('click', () => runFind('next'));
+document.getElementById('find-close').addEventListener('click', closeFind);
+
+function edUndo() {
+  if (!isEditMode()) return;
+  editor.focus();
+  document.execCommand('undo');
+}
+function edRedo() {
+  if (!isEditMode()) return;
+  editor.focus();
+  document.execCommand('redo');
+}
+
+btnUndo.addEventListener('click', edUndo);
+btnRedo.addEventListener('click', edRedo);
+
+/* context menu wiring */
+ectxMode.addEventListener('click',      () => { editToggle.click(); hideEditorCtx(); });
+ectxUndo.addEventListener('click',      () => { edUndo();           hideEditorCtx(); });
+ectxRedo.addEventListener('click',      () => { edRedo();           hideEditorCtx(); });
+ectxSelectAll.addEventListener('click', () => { edSelectAll();       hideEditorCtx(); });
+ectxDuplicate.addEventListener('click', () => { edDuplicateLine();   hideEditorCtx(); });
+ectxComment.addEventListener('click',   () => { edToggleComment();   hideEditorCtx(); });
+ectxFind.addEventListener('click',      () => { openFind();          hideEditorCtx(); });
+ectxGoto.addEventListener('click',      () => { edGoToLine();        hideEditorCtx(); });
+
+/* keyboard shortcuts inside textarea */
+editor.addEventListener('keydown', e => {
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && e.key === '/') { e.preventDefault(); edToggleComment(); }
+  if (ctrl && e.key === 'd') { e.preventDefault(); edDuplicateLine(); }
+  if (ctrl && e.key === 'g') { e.preventDefault(); edGoToLine(); }
+  if (e.key === 'Escape' && findBarEl.classList.contains('open')) { e.preventDefault(); closeFind(); }
+});
+
+/* global keyboard shortcuts (intercept browser defaults) */
+document.addEventListener('keydown', e => {
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && e.key === 'f') {
+    e.preventDefault();
+    if (findBarEl.classList.contains('open')) closeFind(); else openFind();
+  }
+});
+
+/* ---- tab persistence ---- */
+function saveTabs() {
+  const paths = [];
+  tabsBarEl.querySelectorAll('.ed-tab[data-tab-id]').forEach(el => {
+    const id = el.dataset.tabId;
+    if (tabs[id]) paths.push(tabs[id].path);
+  });
+  const active = activeTabId && tabs[activeTabId] ? tabs[activeTabId].path : null;
+  api('/fs-tabs-save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tabs:paths, active})}).catch(()=>{});
+}
+
+function loadSavedTabs() {
+  api('/fs-tabs').then(data => {
+    const paths = data.tabs || [];
+    const activePath = data.active || null;
+    if (!paths.length) return;
+    paths.forEach(p => openFileInTab(p, true));
+    if (activePath) {
+      const activeId = Object.keys(tabs).find(id => tabs[id].path === activePath);
+      if (activeId) switchToTab(activeId);
+    }
+  }).catch(() => {});
+}
+
 /* ---- main actions ---- */
 searchEl.addEventListener('input',  filterTree);
 btnSave.addEventListener('click',   saveFile);
@@ -853,6 +1237,6 @@ uploadInput.addEventListener('change', e => {
   uploadInput.value = "";
 });
 
-document.addEventListener('DOMContentLoaded', () => { setCwd(""); loadTree(); });
+document.addEventListener('DOMContentLoaded', () => { setCwd(""); loadTree().then(() => loadSavedTabs()); });
 </script>
 {% endblock %}

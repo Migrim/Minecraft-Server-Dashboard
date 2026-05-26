@@ -1324,7 +1324,30 @@ def fs_mkdir():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-@app.route("/fs-download", methods=["GET","POST"]) 
+EDITOR_TABS_PATH = os.path.join(app.instance_path, 'editor_tabs.json')
+
+@app.route("/fs-tabs")
+def fs_tabs_get():
+    if os.path.exists(EDITOR_TABS_PATH):
+        try:
+            with open(EDITOR_TABS_PATH, 'r') as f:
+                return jsonify(json.load(f))
+        except Exception:
+            pass
+    return jsonify({'tabs': [], 'active': None})
+
+@app.route("/fs-tabs-save", methods=["POST"])
+def fs_tabs_save():
+    data = request.get_json(force=True) or {}
+    try:
+        os.makedirs(app.instance_path, exist_ok=True)
+        with open(EDITOR_TABS_PATH, 'w') as f:
+            json.dump({'tabs': data.get('tabs', []), 'active': data.get('active')}, f)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route("/fs-download", methods=["GET","POST"])
 def fs_download():
     rel = request.args.get("path","")
     if not rel and request.is_json:
@@ -1334,14 +1357,30 @@ def fs_download():
         rel = (request.form.get("path") or "").strip()
     try:
         abs_p = safe_join(rel)
-        if not os.path.isfile(abs_p):
+        if os.path.isfile(abs_p):
+            return send_file(
+                abs_p,
+                as_attachment=True,
+                download_name=os.path.basename(abs_p),
+                conditional=False
+            )
+        elif os.path.isdir(abs_p):
+            folder_name = os.path.basename(abs_p.rstrip('/\\')) or 'folder'
+            buf = BytesIO()
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for root, _, files in os.walk(abs_p):
+                    for fname in files:
+                        abs_file = os.path.join(root, fname)
+                        zf.write(abs_file, os.path.relpath(abs_file, abs_p))
+            buf.seek(0)
+            return send_file(
+                buf,
+                as_attachment=True,
+                download_name=folder_name + '.zip',
+                mimetype='application/zip'
+            )
+        else:
             return "not found", 404
-        return send_file(
-            abs_p,
-            as_attachment=True,
-            download_name=os.path.basename(abs_p),
-            conditional=False
-        )
     except ValueError:
         return "invalid path", 400
     except Exception as e:

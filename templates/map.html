@@ -8,12 +8,13 @@
   .map-wrap {
     flex: 1 1 auto;
     min-height: 0;
-    position: relative;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
   }
   .map-frame {
     flex: 1 1 auto;
+    min-height: 0;
     width: 100%;
     border: none;
     display: block;
@@ -73,7 +74,7 @@
   const err   = document.getElementById('map-error');
   document.getElementById('bm-port').textContent = port;
 
-  frame.src = `http://${window.location.hostname}:${port}`;
+  frame.src = '/bluemap/';
 
   frame.addEventListener('load', () => {
     try {

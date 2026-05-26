@@ -237,7 +237,7 @@ def ensure_jar_present():
     if not session.get('user'):
         return  # not logged in — require_login handles the redirect to /login
     allowed_eps = {
-        'install', 'upload_jar', 'upload_forge_folder', 'static', 'jar_status',
+        'install', 'upload_jar', 'upload_forge_folder', 'upload_chunk', 'static', 'jar_status',
         'files', 'fs_tree', 'fs_open', 'fs_save', 'fs_download',
         'login', 'logout', 'change_password'
     }

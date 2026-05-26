@@ -114,7 +114,7 @@ systemctl enable --now mc-panel.service || true
 
 BLUEMAP_NGINX_BLOCK=""
 if [ "$BLUEMAP_PORT" != "0" ]; then
-  BLUEMAP_NGINX_BLOCK='    location /map/ {
+  BLUEMAP_NGINX_BLOCK='    location /bluemap/ {
         proxy_pass http://127.0.0.1:'"$BLUEMAP_PORT"'/;
         proxy_set_header Host $host;
         proxy_read_timeout 3600;
@@ -195,6 +195,6 @@ echo "Java: $(java -version 2>&1 | head -1)"
 echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
 [ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"
 echo "Minecraft address: ${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$MC_PORT"
-[ "$BLUEMAP_PORT" != "0" ] && echo "BlueMap: http://${DOMAIN:-$LOCAL_IP}/map/  (direct: http://${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$BLUEMAP_PORT)" || true
+[ "$BLUEMAP_PORT" != "0" ] && echo "BlueMap: http://${DOMAIN:-$LOCAL_IP}/bluemap/  (direct: http://${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$BLUEMAP_PORT)" || true
 ss -ltnp | grep ":$MC_PORT " || true
 ufw status | grep -E "$MC_PORT" || true

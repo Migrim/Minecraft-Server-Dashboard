@@ -50,7 +50,6 @@
     class="map-frame"
     src=""
     allowfullscreen
-    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     title="BlueMap"
   ></iframe>
   <div class="map-error" id="map-error">
@@ -74,7 +73,7 @@
   const err   = document.getElementById('map-error');
   document.getElementById('bm-port').textContent = port;
 
-  frame.src = '/bluemap/';
+  frame.src = `http://${window.location.hostname}:${port}`;
 
   frame.addEventListener('load', () => {
     try {

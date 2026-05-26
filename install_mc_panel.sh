@@ -14,9 +14,10 @@ MMM  M'  "MMM  "YUMMMMMP"      YMMMb   "YUM" MPMMM  "MMM "YUMMMMP" MM;
 
 LOGO
 
+REPO_URL="${REPO_URL:-https://github.com/Migrim/Minecraft-Server-Dashboard.git}"
 DOMAIN="${DOMAIN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
-APP_DIR="$(readlink -f "${APP_DIR:-$PWD}")"
+APP_DIR="$(readlink -f "${APP_DIR:-/opt/mc-panel}")"
 APP_PORT="${APP_PORT:-5003}"
 MC_PORT="${MC_PORT:-25565}"
 WANT_NGINX_STREAM="${WANT_NGINX_STREAM:-0}"
@@ -57,6 +58,16 @@ fi
 
 if [ -n "$DOMAIN" ]; then DEBIAN_FRONTEND=noninteractive apt install -y certbot python3-certbot-nginx || true; fi
 
+# Clone or update panel source
+if [ -d "$APP_DIR/.git" ]; then
+  echo "Updating panel from $REPO_URL ..."
+  git -C "$APP_DIR" pull --ff-only
+else
+  echo "Cloning panel from $REPO_URL ..."
+  rm -rf "$APP_DIR"
+  git clone "$REPO_URL" "$APP_DIR"
+fi
+
 mkdir -p "$APP_DIR/instance/server" "$APP_DIR/uploads" "$APP_DIR/server-files"
 cd "$APP_DIR"
 
@@ -72,11 +83,6 @@ chown -R root:root "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 0775 {} \;
 find "$APP_DIR" -type f -not -path "$APP_DIR/venv/bin/*" -exec chmod 0664 {} \;
 chmod 0755 "$APP_DIR/venv/bin" "$APP_DIR/venv/bin/"*
-
-mkdir -p /opt
-if [ -e /opt/mc-panel ] && [ ! -L /opt/mc-panel ]; then rm -rf /opt/mc-panel; fi
-ln -sfn "$APP_DIR" /opt/mc-panel
-chown -h root:root /opt/mc-panel
 
 APP_MODULE="app:app"
 [ -f "$APP_DIR/Server.py" ] && APP_MODULE="Server:app"
@@ -184,7 +190,6 @@ yes | ufw enable >/dev/null 2>&1 || true
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 PUBL_IP=$(curl -fsS https://api.ipify.org || true)
 echo "Install dir: $APP_DIR"
-echo "Legacy path: /opt/mc-panel -> $APP_DIR"
 echo "Java: $(java -version 2>&1 | head -1)"
 echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
 [ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"

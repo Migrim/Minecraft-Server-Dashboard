@@ -61,7 +61,8 @@ if [ -n "$DOMAIN" ]; then DEBIAN_FRONTEND=noninteractive apt install -y certbot 
 # Clone or update panel source
 if [ -d "$APP_DIR/.git" ]; then
   echo "Updating panel from $REPO_URL ..."
-  git -C "$APP_DIR" pull --ff-only
+  git -C "$APP_DIR" fetch origin
+  git -C "$APP_DIR" reset --hard origin/main
 else
   echo "Cloning panel from $REPO_URL ..."
   rm -rf "$APP_DIR"

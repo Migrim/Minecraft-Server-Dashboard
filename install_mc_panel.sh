@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 trap 'ec=$?; echo "ERROR $ec on line $LINENO"; exit $ec' ERR
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 cat <<'LOGO'
 
@@ -40,7 +41,9 @@ fi
 if ! command -v apt >/dev/null 2>&1; then echo "Debian/Ubuntu required"; exit 1; fi
 
 apt update
-DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip nginx-full ufw rsync curl git wget
+DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-venv python3-pip ufw rsync curl git wget
+DEBIAN_FRONTEND=noninteractive apt install -y nginx-full 2>/dev/null \
+  || DEBIAN_FRONTEND=noninteractive apt install -y nginx
 
 # Install Java (required to run the Minecraft server)
 if command -v java >/dev/null 2>&1; then

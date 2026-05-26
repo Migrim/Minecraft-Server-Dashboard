@@ -3,17 +3,6 @@ set -euo pipefail
 trap 'ec=$?; echo "ERROR $ec on line $LINENO"; exit $ec' ERR
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
-cat <<'LOGO'
-
-.        :     .,~:::::     ::::::::::.                          `::.
-;;,.    ;;;  ,;;;'````'      `;;;```.;;;                          ;;;
-[[[[, ,[[[[, [[[              `]]nnn]]',ccc,   [ccccc,  ,cc[[[cc. [[[
-$$$$$$$$"$$$ $$$               $$$""  $$$cc$$$ $$$$"$$$ $$$___--' $$'
-888 Y88" 888o`88bo,__,o,       888o   888   888888  Y88o88b    ,o,\8o
-MMM  M'  "MMM  "YUMMMMMP"      YMMMb   "YUM" MPMMM  "MMM "YUMMMMP" MM;
-
-LOGO
-
 REPO_URL="${REPO_URL:-https://github.com/Migrim/Minecraft-Server-Dashboard.git}"
 DOMAIN="${DOMAIN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
@@ -58,15 +47,33 @@ fi
 
 if [ -n "$DOMAIN" ]; then DEBIAN_FRONTEND=noninteractive apt install -y certbot python3-certbot-nginx || true; fi
 
-# Clone or update panel source
+# Clone or update panel source, preserving user data in all cases
 if [ -d "$APP_DIR/.git" ]; then
   echo "Updating panel from $REPO_URL ..."
   git -C "$APP_DIR" fetch origin
   git -C "$APP_DIR" reset --hard origin/main
+  # Remove stale untracked files (excludes data dirs and venv)
+  git -C "$APP_DIR" clean -fd \
+    --exclude=instance \
+    --exclude=uploads \
+    --exclude=server-files \
+    --exclude=venv
 else
   echo "Cloning panel from $REPO_URL ..."
+  # Preserve existing instance data across a fresh clone
+  TMP_SAVE=""
+  if [ -d "$APP_DIR/instance" ]; then
+    TMP_SAVE=$(mktemp -d)
+    cp -a "$APP_DIR/instance" "$TMP_SAVE/"
+    echo "Saved existing instance data to $TMP_SAVE"
+  fi
   rm -rf "$APP_DIR"
   git clone "$REPO_URL" "$APP_DIR"
+  if [ -n "$TMP_SAVE" ] && [ -d "$TMP_SAVE/instance" ]; then
+    cp -a "$TMP_SAVE/instance" "$APP_DIR/"
+    rm -rf "$TMP_SAVE"
+    echo "Restored instance data."
+  fi
 fi
 
 mkdir -p "$APP_DIR/instance/server" "$APP_DIR/uploads" "$APP_DIR/server-files"
@@ -110,7 +117,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now mc-panel.service || true
+systemctl enable mc-panel.service
+systemctl restart mc-panel.service
 
 BLUEMAP_NGINX_BLOCK=""
 if [ "$BLUEMAP_PORT" != "0" ]; then
@@ -188,13 +196,32 @@ ufw allow ${MC_PORT}/tcp || true
 [ "$BLUEMAP_PORT" != "0" ] && ufw allow ${BLUEMAP_PORT}/tcp || true
 yes | ufw enable >/dev/null 2>&1 || true
 
+# Collect info for summary
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-PUBL_IP=$(curl -fsS https://api.ipify.org || true)
-echo "Install dir: $APP_DIR"
-echo "Java: $(java -version 2>&1 | head -1)"
-echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
-[ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"
-echo "Minecraft address: ${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$MC_PORT"
-[ "$BLUEMAP_PORT" != "0" ] && echo "BlueMap: http://${DOMAIN:-$LOCAL_IP}/bluemap/  (direct: http://${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$BLUEMAP_PORT)" || true
-ss -ltnp | grep ":$MC_PORT " || true
-ufw status | grep -E "$MC_PORT" || true
+PUBL_IP=$(curl -fsS https://api.ipify.org 2>/dev/null || true)
+DISPLAY_HOST="${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}"
+
+cat <<'LOGO'
+
+.        :     .,~:::::     ::::::::::.                          `::.
+;;,.    ;;;  ,;;;'````'      `;;;```.;;;                          ;;;
+[[[[, ,[[[[, [[[              `]]nnn]]',ccc,   [ccccc,  ,cc[[[cc. [[[
+$$$$$$$$"$$$ $$$               $$$""  $$$cc$$$ $$$$"$$$ $$$___--' $$'
+888 Y88" 888o`88bo,__,o,       888o   888   888888  Y88o88b    ,o,\8o
+MMM  M'  "MMM  "YUMMMMMP"      YMMMb   "YUM" MPMMM  "MMM "YUMMMMP" MM;
+
+LOGO
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Installation complete!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  Panel       →  http://${DISPLAY_HOST}"
+[ -n "$DOMAIN" ] && echo "  Panel HTTPS →  https://$DOMAIN"
+echo "  Minecraft   →  ${DISPLAY_HOST}:${MC_PORT}"
+[ "$BLUEMAP_PORT" != "0" ] && echo "  BlueMap     →  http://${DISPLAY_HOST}/bluemap/"
+echo ""
+echo "  Install dir →  $APP_DIR"
+echo "  Java        →  $(java -version 2>&1 | head -1)"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -22,6 +22,7 @@ MC_PORT="${MC_PORT:-25565}"
 WANT_NGINX_STREAM="${WANT_NGINX_STREAM:-0}"
 MC_BACKEND_PORT="${MC_BACKEND_PORT:-25566}"
 JAVA_VERSION="${JAVA_VERSION:-25}"
+BLUEMAP_PORT="${BLUEMAP_PORT:-8100}"
 
 # Detect OS
 OS_ID=""
@@ -104,6 +105,15 @@ EOF
 systemctl daemon-reload
 systemctl enable --now mc-panel.service || true
 
+BLUEMAP_NGINX_BLOCK=""
+if [ "$BLUEMAP_PORT" != "0" ]; then
+  BLUEMAP_NGINX_BLOCK='    location /map/ {
+        proxy_pass http://127.0.0.1:'"$BLUEMAP_PORT"'/;
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600;
+    }'
+fi
+
 mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 cat >/etc/nginx/sites-available/mc-panel <<EOF
 server {
@@ -129,6 +139,7 @@ server {
     location /static/ {
         proxy_pass http://127.0.0.1:$APP_PORT/static/;
     }
+${BLUEMAP_NGINX_BLOCK}
 }
 EOF
 
@@ -167,6 +178,7 @@ ufw allow 22/tcp || true
 ufw allow 80/tcp || true
 ufw allow 443/tcp || true
 ufw allow ${MC_PORT}/tcp || true
+[ "$BLUEMAP_PORT" != "0" ] && ufw allow ${BLUEMAP_PORT}/tcp || true
 yes | ufw enable >/dev/null 2>&1 || true
 
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -177,5 +189,6 @@ echo "Java: $(java -version 2>&1 | head -1)"
 echo "Panel: http://${DOMAIN:-$LOCAL_IP}"
 [ -n "$DOMAIN" ] && echo "Panel HTTPS: https://$DOMAIN"
 echo "Minecraft address: ${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$MC_PORT"
+[ "$BLUEMAP_PORT" != "0" ] && echo "BlueMap: http://${DOMAIN:-$LOCAL_IP}/map/  (direct: http://${DOMAIN:-${PUBL_IP:-$LOCAL_IP}}:$BLUEMAP_PORT)" || true
 ss -ltnp | grep ":$MC_PORT " || true
 ufw status | grep -E "$MC_PORT" || true

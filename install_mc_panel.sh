@@ -61,9 +61,9 @@ cd "$APP_DIR"
 
 python3 -m venv venv
 "$APP_DIR/venv/bin/pip" install --upgrade pip setuptools wheel
-"$APP_DIR/venv/bin/pip" install flask flask-socketio eventlet requests flask-cors gunicorn
+"$APP_DIR/venv/bin/pip" install flask flask-socketio requests flask-cors gunicorn
 "$APP_DIR/venv/bin/python" - <<'PY'
-import flask, flask_socketio, eventlet, flask_cors
+import flask, flask_socketio, flask_cors
 print("ok")
 PY
 
@@ -94,7 +94,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment=INSTANCE_PATH=$APP_DIR/instance
 UMask=007
 ExecStartPre=/usr/bin/install -d -o root -g root -m 0775 $APP_DIR/instance $APP_DIR/instance/server $APP_DIR/uploads $APP_DIR/server-files
-ExecStart=$APP_DIR/venv/bin/gunicorn -k eventlet -w 1 -b 127.0.0.1:$APP_PORT $APP_MODULE
+ExecStart=$APP_DIR/venv/bin/gunicorn --worker-class=gthread --threads=10 -w 1 -b 127.0.0.1:$APP_PORT $APP_MODULE
 Restart=always
 RestartSec=3
 [Install]

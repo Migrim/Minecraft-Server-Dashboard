@@ -22,7 +22,21 @@ WANT_NGINX_STREAM="${WANT_NGINX_STREAM:-0}"
 MC_BACKEND_PORT="${MC_BACKEND_PORT:-25566}"
 JAVA_VERSION="${JAVA_VERSION:-21}"
 
-if [ "$(id -u)" -ne 0 ]; then echo "run as root"; exit 1; fi
+# Detect OS
+OS_ID=""
+if [ -f /etc/os-release ]; then
+  . /etc/os-release
+  OS_ID="${ID:-}"
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  if [ "$OS_ID" = "ubuntu" ]; then
+    echo "run as root: sudo bash $0"
+  else
+    echo "run as root: su - then bash $0"
+  fi
+  exit 1
+fi
 if ! command -v apt >/dev/null 2>&1; then echo "Debian/Ubuntu required"; exit 1; fi
 
 apt update

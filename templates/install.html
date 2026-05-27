@@ -303,10 +303,10 @@
   }
   .dz-ico--success svg {
     width: 26px; height: 26px;
-    stroke-dasharray: 24; stroke-dashoffset: 24;
+    stroke-dasharray: 30; stroke-dashoffset: 30;
   }
   .dz-success-state.visible .dz-ico--success svg {
-    animation: check-draw .32s .42s ease forwards;
+    animation: check-draw .32s .42s ease both;
   }
   .dz-success-state .dz-sub { margin: 0; }
   .success-timer-bar {
@@ -402,6 +402,30 @@
   }
   .mode-tab:hover:not(.active) { color: var(--text-2); }
   .mode-tab svg { width: 13px; height: 13px; }
+
+  /* panel switcher */
+  .panel-container {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  #jar-panel, #forge-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .panel-active {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity .24s ease, transform .24s ease, visibility 0s 0s;
+  }
+  .panel-hidden {
+    opacity: 0;
+    transform: translateY(8px);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .24s ease, transform .24s ease, visibility 0s .24s;
+  }
 </style>
 </head>
 <body>
@@ -530,7 +554,8 @@
               </button>
             </div>
 
-            <div id="jar-panel">
+            <div class="panel-container">
+            <div id="jar-panel" class="panel-active">
             <div class="dropzone" id="dropzone">
               <!-- default state -->
               <div class="dz-default" id="dz-default">
@@ -591,7 +616,7 @@
             </div>
             </div><!-- /#jar-panel -->
 
-            <div id="forge-panel" style="display:none">
+            <div id="forge-panel" class="panel-hidden">
               <div class="dropzone" id="forge-dropzone">
                 <!-- default state -->
                 <div class="dz-default" id="forge-dz-default">
@@ -660,6 +685,7 @@
                 </div>
               </div>
             </div><!-- /#forge-panel -->
+            </div><!-- /.panel-container -->
 
           </div>
         </div>
@@ -720,14 +746,14 @@
   const jarPanel  = document.getElementById('jar-panel');
   const forgePanel = document.getElementById('forge-panel');
 
-  tabJar.addEventListener('click', () => {
-    tabJar.classList.add('active'); tabForge.classList.remove('active');
-    jarPanel.style.display = ''; forgePanel.style.display = 'none';
-  });
-  tabForge.addEventListener('click', () => {
-    tabForge.classList.add('active'); tabJar.classList.remove('active');
-    forgePanel.style.display = ''; jarPanel.style.display = 'none';
-  });
+  function switchToPanel(active, inactive, activeTab, inactiveTab) {
+    activeTab.classList.add('active'); inactiveTab.classList.remove('active');
+    active.classList.add('panel-active'); active.classList.remove('panel-hidden');
+    inactive.classList.add('panel-hidden'); inactive.classList.remove('panel-active');
+  }
+
+  tabJar.addEventListener('click', () => switchToPanel(jarPanel, forgePanel, tabJar, tabForge));
+  tabForge.addEventListener('click', () => switchToPanel(forgePanel, jarPanel, tabForge, tabJar));
 
   /* ── chunked upload helpers ── */
   const CHUNK_SIZE  = 1 * 1024 * 1024; // 1 MB per chunk

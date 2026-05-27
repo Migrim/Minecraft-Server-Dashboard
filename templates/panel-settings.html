@@ -73,6 +73,31 @@
   .info-v { color:var(--text); font-size:13px; font-family:'JetBrains Mono',ui-monospace,monospace; word-break:break-word; }
   .info-v.muted { color:var(--text-4); }
 
+  /* discord summary in status card */
+  .discord-block { display:flex; flex-direction:column; gap:12px; }
+  .discord-block-row { display:flex; align-items:flex-start; gap:12px; }
+  .discord-block-ico {
+    width:34px; height:34px; border-radius:9px; flex-shrink:0;
+    background:color-mix(in oklab,#5865f2 12%,var(--surface-2));
+    border:1px solid color-mix(in oklab,#5865f2 22%,var(--border));
+    color:#5865f2; display:flex; align-items:center; justify-content:center;
+  }
+  .discord-block-ico svg { width:16px; height:16px; }
+  .discord-block-meta { flex:1; min-width:0; }
+  .discord-block-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:4px; }
+  .discord-block-desc { font-size:12px; color:var(--text-3); line-height:1.55; }
+  .discord-block-status {
+    font-size:12px; color:var(--text-3);
+    display:flex; align-items:center; gap:6px;
+    padding-left:46px;
+  }
+  .discord-block-status::before {
+    content:''; width:6px; height:6px; border-radius:999px; flex-shrink:0;
+    background:var(--border-strong);
+  }
+  .discord-block-status.configured { color:var(--ok); }
+  .discord-block-status.configured::before { background:var(--ok); }
+
   .notice {
     display:flex; align-items:center; gap:8px;
     padding:8px 12px;
@@ -140,6 +165,19 @@
   .preset-btn.active { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 16%,transparent); color:var(--text); }
   .preset-swatch { width:18px; height:18px; border-radius:6px; flex:0 0 18px; box-shadow:0 0 0 1px rgba(0,0,0,.12) inset; }
   .preset-btn span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .favicon-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); gap:6px; margin-top:10px; }
+  .favicon-btn {
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    padding:9px 8px 8px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; color:var(--text-3);
+    font:inherit; font-size:11px; cursor:pointer;
+    transition:background .15s,border-color .15s,color .15s;
+  }
+  .favicon-btn:hover { background:var(--bg-soft); color:var(--text-2); border-color:var(--border-strong); }
+  .favicon-btn.active { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 16%,transparent); color:var(--text); }
+  .favicon-btn img { width:20px; height:20px; border-radius:4px; }
+  .favicon-btn span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
   .customize-body { padding:22px; }
   .customize-body .field-hint { margin-top:8px; }
   .customize-field + .customize-field { margin-top:22px; }
@@ -207,7 +245,7 @@
 
   .inline-toggle { display:inline-flex; align-items:center; gap:10px; color:var(--text-2); font-size:13px; cursor:pointer; }
 
-  .config-foot { display:flex; align-items:center; gap:10px; margin-top:auto; padding-top:22px; border-top:1px solid var(--border); }
+  .config-foot { display:flex; align-items:center; gap:10px; margin-top:auto; padding-top:22px; }
 
   /* ---------- backups table ---------- */
   .table-wrap { overflow-x:auto; flex:1 1 auto; }
@@ -296,14 +334,23 @@
   .step .dot-mini.ok  { background:var(--ok); }
   .step .dot-mini.err { background:var(--danger); }
 
-  /* ---- reinstall overlay ---- */
-  #reinstall-overlay {
+  /* ---- reinstall / restore overlays ---- */
+  #reinstall-overlay, #restore-overlay {
     position:fixed; inset:0; z-index:10000;
     background: color-mix(in oklab, var(--bg) 82%, transparent);
-    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
     display:none; align-items:center; justify-content:center; flex-direction:column;
   }
-  #reinstall-overlay.show { display:flex; animation:ri-bg-in .3s ease both; }
+  #reinstall-overlay.show, #restore-overlay.show { display:flex; animation:ri-bg-in .3s ease both; }
+  #rst-icon { background:var(--accent-soft); border-color:color-mix(in oklab,var(--accent) 30%,transparent); color:var(--accent); }
+  #rst-icon.done  { background:var(--accent-soft); border-color:color-mix(in oklab,var(--accent) 30%,transparent); color:var(--accent); animation:ri-pop .3s ease-out both; }
+  #rst-icon.error { background:var(--danger-soft); border-color:color-mix(in oklab,var(--danger) 30%,transparent); color:var(--danger); animation:ri-pop .3s ease-out both; }
+  .ri-step-ico .ri-err { display:none; }
+  .ri-step.error { opacity:1; color:var(--text-2); border-color:color-mix(in oklab,var(--danger) 35%,transparent); background:var(--danger-soft); animation:ri-step-done .3s cubic-bezier(.21,1.02,.73,1); }
+  .ri-step.error .ri-idle { display:none; }
+  .ri-step.error .ri-spin { display:none; }
+  .ri-step.error .ri-check { display:none; }
+  .ri-step.error .ri-err { display:flex; color:var(--danger); }
   @keyframes ri-bg-in { from{opacity:0} to{opacity:1} }
   .ri-card {
     width:min(420px,92vw); background:var(--surface);
@@ -354,7 +401,7 @@
   }
   .ri-step-ico { flex-shrink:0; width:18px; height:18px; display:flex; align-items:center; justify-content:center; }
   .ri-step-ico .ri-spin {
-    width:14px; height:14px; border-radius:50%;
+    display:none; width:14px; height:14px; border-radius:50%;
     border:2px solid currentColor; border-right-color:transparent;
     animation:spin .6s linear infinite; color:var(--accent);
   }
@@ -363,6 +410,7 @@
   .ri-step-ico .ri-idle { width:8px; height:8px; border-radius:50%; background:var(--border-strong); }
   .ri-step.active .ri-idle { display:none; }
   .ri-step.active .ri-spin { display:block; }
+  #rst-action-bar { width:100%; display:flex; flex-direction:column; align-items:center; gap:10px; }
   .ri-step.active .ri-check { display:none; }
   .ri-step.done .ri-idle { display:none; }
   .ri-step.done .ri-spin { display:none; }
@@ -371,6 +419,13 @@
   .ri-step.error .ri-spin { display:none; }
   .ri-step.error .ri-check { display:none; }
   .ri-step.error .ri-err { display:flex; color:var(--danger); }
+  .ri-step-ico .ri-dash { display:none; font-size:13px; font-weight:500; color:var(--text-3); line-height:1; }
+  .ri-step.waiting { opacity:1; color:var(--text-2); border-color:var(--border-strong); }
+  .ri-step.waiting .ri-idle { display:none; }
+  .ri-step.waiting .ri-spin { display:none; }
+  .ri-step.waiting .ri-check { display:none; }
+  .ri-step.waiting .ri-err { display:none; }
+  .ri-step.waiting .ri-dash { display:flex; }
   .ri-msg { font-size:13px; color:var(--text-3); text-align:center; min-height:18px; transition:opacity .2s; }
   .step .step-t { flex:1; }
   .step.pending { opacity:.55; }
@@ -390,11 +445,6 @@
   .discord-col { display:flex; flex-direction:column; gap:22px; }
   .discord-section { display:flex; flex-direction:column; gap:14px; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:18px 18px 20px; }
   .discord-section-head { display:flex; align-items:flex-start; gap:12px; }
-  .discord-section-icon { width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .discord-section-icon svg { width:18px; height:18px; }
-  .discord-section-icon.server { background:color-mix(in oklab,var(--ok) 14%,var(--surface)); color:var(--ok); border:1px solid color-mix(in oklab,var(--ok) 22%,transparent); }
-  .discord-section-icon.player { background:color-mix(in oklab,var(--accent) 14%,var(--surface)); color:var(--accent); border:1px solid color-mix(in oklab,var(--accent) 22%,transparent); }
-  .discord-section-icon.chat { background:color-mix(in oklab,#5865f2 14%,var(--surface)); color:#5865f2; border:1px solid color-mix(in oklab,#5865f2 22%,transparent); }
   .discord-section-meta { flex:1 1 0; min-width:0; }
   .discord-section-title { font-size:14px; font-weight:600; color:var(--text); }
   .discord-section-sub { font-size:12px; color:var(--text-3); margin-top:2px; }
@@ -403,7 +453,6 @@
   .discord-event-row .toggle { flex-shrink:0; }
   .discord-event-info { flex:1 1 0; min-width:0; }
   .discord-event-name { font-size:13px; font-weight:500; color:var(--text-2); display:flex; align-items:center; gap:7px; }
-  .discord-event-name svg { width:13px; height:13px; flex-shrink:0; }
   .discord-event-desc { font-size:11.5px; color:var(--text-3); margin-top:2px; }
   .discord-section-divider { height:1px; background:var(--border); margin:2px 0; }
   @media (max-width:780px) {
@@ -510,15 +559,18 @@
           <div class="info-k">MOTD</div><div class="info-v" id="motd">—</div>
         </div>
 
-        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px;display:flex;flex-direction:column;gap:10px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-            <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);">Discord Notifications</div>
-            <button id="btn-discord-open" class="btn btn-secondary" style="padding:7px 14px;font-size:12.5px;">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.03.056a19.9 19.9 0 0 0 5.993 3.03.077.077 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
-              Configure
-            </button>
+        <div class="discord-block">
+          <div class="discord-block-row">
+            <div class="discord-block-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.03.056a19.9 19.9 0 0 0 5.993 3.03.077.077 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+            </div>
+            <div class="discord-block-meta">
+              <div class="discord-block-title">Discord Notifications</div>
+              <div class="discord-block-desc">Send automatic messages to a Discord channel when your server starts, stops, crashes, or players join and leave. Just paste a webhook URL from your Discord server settings and pick which events to post.</div>
+            </div>
+            <button id="btn-discord-open" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;flex-shrink:0;align-self:flex-start;">Configure</button>
           </div>
-          <div id="discord-summary" style="font-size:12.5px;color:var(--text-3);">Not configured</div>
+          <div id="discord-summary" class="discord-block-status">Not configured</div>
         </div>
 
       </div>
@@ -671,21 +723,28 @@
     <div class="customize-body">
       <div class="customize-field">
         <label class="label" for="accent_color">Accent color</label>
-        <div class="color-row">
-          <input type="color" class="color-input" id="accent_color_picker" aria-label="Accent color picker">
-          <input type="text" class="input" id="accent_color" maxlength="7" placeholder="#c2553d" spellcheck="false">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div class="color-row" style="margin:0;flex-shrink:0;">
+            <input type="color" class="color-input" id="accent_color_picker" aria-label="Accent color picker">
+            <input type="text" class="input" id="accent_color" maxlength="7" placeholder="#c2553d" spellcheck="false">
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
+            <span class="label" style="margin:0;">Accent text</span>
+            <div class="segmented" role="radiogroup" aria-label="Accent text color">
+              <label><input type="radio" name="accent_text_mode" value="auto" checked><span>Auto</span></label>
+              <label><input type="radio" name="accent_text_mode" value="white"><span>White</span></label>
+              <label><input type="radio" name="accent_text_mode" value="dark"><span>Dark</span></label>
+            </div>
+          </div>
         </div>
         <div class="field-hint">Used across buttons, highlights and active states.</div>
         <div class="preset-grid" id="accent-presets"></div>
       </div>
       <div class="customize-field">
-        <div class="label">Accent text</div>
-        <div class="segmented" role="radiogroup" aria-label="Accent text color">
-          <label><input type="radio" name="accent_text_mode" value="auto" checked><span>Auto</span></label>
-          <label><input type="radio" name="accent_text_mode" value="white"><span>White</span></label>
-          <label><input type="radio" name="accent_text_mode" value="dark"><span>Dark</span></label>
-        </div>
-        <div class="field-hint">Controls text on accent-colored buttons and marks.</div>
+        <label class="label">Favicon</label>
+        <input type="hidden" id="favicon" value="favicon.svg">
+        <div class="favicon-grid" id="favicon-grid"></div>
+        <div class="field-hint">Changes the browser tab icon.</div>
       </div>
     </div>
   </div>
@@ -778,7 +837,7 @@
     </div>
     <div class="bd" style="color:var(--text-2);font-size:13.5px;line-height:1.6">
       This will <strong style="color:var(--danger)">permanently delete the entire server folder</strong> and stop any running server process. The install wizard will open so you can upload a new server jar.<br><br>
-      Backups are <strong>not</strong> affected.
+      Backups, Discord notifications, and customisation settings remain <strong>unaffected</strong>.
     </div>
     <div class="ft">
       <button id="reinstall-cancel" class="btn btn-secondary">Cancel</button>
@@ -798,23 +857,54 @@
   </div>
 </div>
 
-<div id="restore-modal" class="modal">
-  <div class="box">
-    <div class="hd">
-      Restoring Backup
-      <span style="font-size:12px;font-weight:400;color:var(--text-3)" id="restore-sub">Working…</span>
+<!-- restore animation overlay -->
+<div id="restore-overlay">
+  <div class="ri-card">
+    <div class="ri-icon-wrap" id="rst-icon">
+      <svg id="rst-icon-restore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <svg id="rst-icon-check" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
-    <div class="bd">
-      <div class="checklist">
-        <div class="step pending" data-step="locking">  <span class="dot-mini"></span><span class="step-t">Locking panel</span>  <span class="spin-sm"></span></div>
-        <div class="step pending" data-step="stopping"> <span class="dot-mini"></span><span class="step-t">Stopping server</span> <span class="spin-sm"></span></div>
-        <div class="step pending" data-step="replacing"><span class="dot-mini"></span><span class="step-t">Replacing files</span><span class="spin-sm"></span></div>
-        <div class="step pending" data-step="unlocking"><span class="dot-mini"></span><span class="step-t">Unlocking</span>       <span class="spin-sm"></span></div>
-        <div class="step pending" data-step="starting"> <span class="dot-mini"></span><span class="step-t">Starting server</span> <span class="spin-sm"></span></div>
-        <div class="step pending" data-step="done">     <span class="dot-mini"></span><span class="step-t">Finished</span>        <span class="spin-sm"></span></div>
+    <h2 class="ri-title" id="rst-title">Restoring Backup…</h2>
+    <div class="ri-steps">
+      <div class="ri-step" data-step="locking">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Locking panel</span>
+      </div>
+      <div class="ri-step" data-step="stopping">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Stopping server</span>
+      </div>
+      <div class="ri-step" data-step="replacing">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Replacing files</span>
+      </div>
+      <div class="ri-step" data-step="unlocking">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Unlocking</span>
+      </div>
+      <div class="ri-step" data-step="starting">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Starting server</span>
+      </div>
+      <div class="ri-step" data-step="done">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Finished</span>
       </div>
     </div>
-    <div class="ft"><button id="restore-close" class="btn btn-secondary">Close</button></div>
+    <div class="ri-msg" id="rst-msg">This may take a moment…</div>
+    <div id="rst-action-bar" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px">
+        <span style="font-size:12px;color:var(--text-3)">Auto-starting…</span>
+        <div style="display:flex;gap:6px">
+          <button id="rst-btn-start-now" class="btn btn-primary" style="font-size:12px;padding:5px 12px">Start now</button>
+          <button id="rst-btn-skip" class="btn btn-secondary" style="font-size:12px;padding:5px 12px">Skip</button>
+        </div>
+      </div>
+      <div style="width:100%;background:var(--border);border-radius:4px;overflow:hidden;height:4px">
+        <div id="rst-progress-bar" style="height:100%;background:var(--accent);width:100%;border-radius:4px"></div>
+      </div>
+    </div>
+    <button id="restore-close" class="btn btn-secondary" style="display:none">Close</button>
   </div>
 </div>
 
@@ -852,7 +942,7 @@
       <div style="margin-bottom:18px;">
         <label class="label" style="display:block;font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:7px;">Server Name <span style="font-weight:400;color:var(--text-3)">(used in all messages)</span></label>
         <input type="text" class="input" id="discord_server_name" placeholder="e.g. My SMP, Survival World, …" spellcheck="false" style="max-width:400px;">
-        <div class="field-hint">Shown in every Discord notification instead of the Minecraft version string.</div>
+        <div class="field-hint">This Name is shown in the footer of every Discord notification.</div>
       </div>
       <div class="discord-sections">
 
@@ -862,10 +952,7 @@
         <!-- ── Server Events ── -->
         <div class="discord-section">
           <div class="discord-section-head">
-            <div class="discord-section-icon server">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m8 21 4-4 4 4"/><path d="M12 17v4"/></svg>
-            </div>
-            <div class="discord-section-meta">
+<div class="discord-section-meta">
               <div class="discord-section-title">Server Events</div>
               <div class="discord-section-sub">Start · Stop · Restart · Crash</div>
             </div>
@@ -885,27 +972,24 @@
               <label class="toggle"><input type="checkbox" id="discord_notify_start"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#57f287" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
                   Server Start
                 </div>
-                <div class="discord-event-desc">When the server finishes starting up</div>
+                <div class="discord-event-desc">When the server is starting up</div>
               </div>
             </div>
             <div class="discord-event-row">
               <label class="toggle"><input type="checkbox" id="discord_notify_stop"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#949ba4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6"/></svg>
                   Server Stop
                 </div>
-                <div class="discord-event-desc">When the server shuts down cleanly</div>
+                <div class="discord-event-desc">When the server shuts down</div>
               </div>
             </div>
             <div class="discord-event-row">
               <label class="toggle"><input type="checkbox" id="discord_notify_restart"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#f0a500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                   Server Restart
                 </div>
                 <div class="discord-event-desc">When a scheduled or manual restart begins</div>
@@ -915,7 +999,6 @@
               <label class="toggle"><input type="checkbox" id="discord_notify_crash"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#ed4245" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                   Server Crash
                 </div>
                 <div class="discord-event-desc">When the process dies unexpectedly</div>
@@ -927,10 +1010,7 @@
         <!-- Chat Log -->
         <div class="discord-section">
           <div class="discord-section-head">
-            <div class="discord-section-icon chat">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </div>
-            <div class="discord-section-meta">
+<div class="discord-section-meta">
               <div class="discord-section-title">Chat Log</div>
               <div class="discord-section-sub">Relay in-game chat messages to Discord</div>
             </div>
@@ -947,10 +1027,7 @@
         <!-- ── Right column: Player Actions ── -->
         <div class="discord-section">
           <div class="discord-section-head">
-            <div class="discord-section-icon player">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <div class="discord-section-meta">
+<div class="discord-section-meta">
               <div class="discord-section-title">Player Actions</div>
               <div class="discord-section-sub">Join · Leave · Playtime · Achievements · Deaths</div>
             </div>
@@ -962,7 +1039,7 @@
           </div>
           <div>
             <input type="text" class="input" id="discord_player_webhook_url" placeholder="https://discord.com/api/webhooks/…" spellcheck="false">
-            <div class="field-hint">Can be a different channel from server events. Each notification includes the player's Minecraft skin as an icon.</div>
+            <div class="field-hint">Paste a Discord channel webhook URL.</div>
           </div>
           <div class="discord-section-divider"></div>
           <div class="discord-events">
@@ -970,17 +1047,15 @@
               <label class="toggle"><input type="checkbox" id="discord_notify_first_join"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#f59e0b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                   First Join
                 </div>
-                <div class="discord-event-desc">When a player joins the server for the very first time</div>
+                <div class="discord-event-desc">When a player joins the server for the very first time (wip)</div>
               </div>
             </div>
             <div class="discord-event-row">
               <label class="toggle"><input type="checkbox" id="discord_notify_join"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#57f287" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                   Player Join
                 </div>
                 <div class="discord-event-desc">When a player connects to the server</div>
@@ -990,7 +1065,6 @@
               <label class="toggle"><input type="checkbox" id="discord_notify_leave"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#949ba4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                   Player Leave
                 </div>
                 <div class="discord-event-desc">When a player disconnects</div>
@@ -1000,17 +1074,15 @@
               <label class="toggle"><input type="checkbox" id="discord_notify_playtime"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#5865f2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                   Session Playtime
                 </div>
-                <div class="discord-event-desc">Session duration shown in the leave notification</div>
+                <div class="discord-event-desc">Play duration attached to the leave notification</div>
               </div>
             </div>
             <div class="discord-event-row">
               <label class="toggle"><input type="checkbox" id="discord_notify_achievement"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#d97706" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                   Advancements
                 </div>
                 <div class="discord-event-desc">When a player earns an advancement or challenge</div>
@@ -1020,7 +1092,6 @@
               <label class="toggle"><input type="checkbox" id="discord_notify_death"><span class="track"></span><span class="thumb"></span></label>
               <div class="discord-event-info">
                 <div class="discord-event-name">
-                  <svg style="color:#ed4245" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                   Player Deaths
                 </div>
                 <div class="discord-event-desc">When a player dies — includes the full death message</div>
@@ -1082,15 +1153,96 @@ function ensureSocket(){
   if(!sock) sock=io();
   return sock;
 }
-function openRestoreModal(){ const m=document.getElementById('restore-modal'); m.classList.add('show'); resetRestoreSteps(); document.getElementById('restore-close').disabled=true; document.getElementById('restore-sub').textContent='Working…'; }
-function closeRestoreModal(){ document.getElementById('restore-modal').classList.remove('show'); }
-function resetRestoreSteps(){ document.querySelectorAll('#restore-modal .step').forEach(s=>{s.classList.remove('active','done','err');s.classList.add('pending'); const d=s.querySelector('.dot-mini'); if(d)d.classList.remove('ok','err');}); }
-function setActive(s){ const e=document.querySelector('#restore-modal .step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('pending','done','err'); e.classList.add('active'); }
-function setDone(s){ const e=document.querySelector('#restore-modal .step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('pending','active','err'); e.classList.add('done'); const d=e.querySelector('.dot-mini'); if(d){d.classList.remove('err');d.classList.add('ok');} }
-function setErr(s){ const e=document.querySelector('#restore-modal .step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('pending','active','done'); e.classList.add('err'); const d=e.querySelector('.dot-mini'); if(d){d.classList.remove('ok');d.classList.add('err');} }
+let rstCountdownTimer=null, rstCountdownRemaining=5000, rstCountdownRunSince=0;
+function openRestoreModal(){
+  const o=document.getElementById('restore-overlay');
+  o.classList.add('show');
+  if(rstCountdownTimer){ clearTimeout(rstCountdownTimer); rstCountdownTimer=null; }
+  rstCountdownRemaining=5000;
+  resetRestoreSteps();
+  document.getElementById('restore-close').style.display='none';
+  document.getElementById('rst-action-bar').style.display='none';
+  const pb=document.getElementById('rst-progress-bar');
+  pb.style.transition='none'; pb.style.width='100%';
+  document.getElementById('rst-msg').textContent='This may take a moment…';
+  document.getElementById('rst-title').textContent='Restoring Backup…';
+  const ic=document.getElementById('rst-icon');
+  ic.classList.remove('done','error');
+  document.getElementById('rst-icon-restore').style.display='';
+  document.getElementById('rst-icon-check').style.display='none';
+}
+function closeRestoreModal(){ document.getElementById('restore-overlay').classList.remove('show'); }
+function resetRestoreSteps(){ document.querySelectorAll('#restore-overlay .ri-step').forEach(s=>{ s.classList.remove('active','done','error','waiting'); }); }
+function setActive(s){ const e=document.querySelector('#restore-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('done','error','waiting'); e.classList.add('active'); }
+function setWaiting(s){ const e=document.querySelector('#restore-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('active','done','error'); e.classList.add('waiting'); }
+function setDone(s){ const e=document.querySelector('#restore-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('active','error','waiting'); e.classList.add('done'); }
+function setErr(s){ const e=document.querySelector('#restore-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('active','done','waiting'); e.classList.add('error'); }
 function showRestoreError(message){
   document.getElementById('restore-error-msg').textContent=message||'Restore failed.';
   document.getElementById('restore-error-modal').classList.add('show');
+}
+function _runCountdown(){
+  const pb=document.getElementById('rst-progress-bar');
+  pb.offsetWidth;
+  pb.style.transition='width '+(rstCountdownRemaining/1000).toFixed(2)+'s linear';
+  pb.style.width='0%';
+  rstCountdownRunSince=Date.now();
+  rstCountdownTimer=setTimeout(triggerRestoreStart, rstCountdownRemaining);
+}
+function pauseCountdown(){
+  if(!rstCountdownTimer) return;
+  clearTimeout(rstCountdownTimer); rstCountdownTimer=null;
+  rstCountdownRemaining=Math.max(0, rstCountdownRemaining-(Date.now()-rstCountdownRunSince));
+  const pb=document.getElementById('rst-progress-bar');
+  const cw=parseFloat(getComputedStyle(pb).width);
+  const pw=pb.parentElement.offsetWidth||1;
+  pb.style.transition='none';
+  pb.style.width=(cw/pw*100).toFixed(1)+'%';
+}
+function resumeCountdown(){
+  if(rstCountdownTimer||rstCountdownRemaining<=0) return;
+  _runCountdown();
+}
+function startRestoreCountdown(){
+  setDone('locking'); setDone('stopping'); setDone('replacing'); setDone('unlocking');
+  setWaiting('starting');
+  document.getElementById('rst-msg').textContent='';
+  document.getElementById('rst-action-bar').style.display='flex';
+  const pb=document.getElementById('rst-progress-bar');
+  pb.style.transition='none'; pb.style.width='100%';
+  rstCountdownRemaining=5000;
+  _runCountdown();
+}
+function triggerRestoreStart(){
+  if(rstCountdownTimer){ clearTimeout(rstCountdownTimer); rstCountdownTimer=null; }
+  document.getElementById('rst-action-bar').style.display='none';
+  setActive('starting');
+  api('/start').then(()=>{
+    setDone('starting'); setDone('done');
+    document.getElementById('rst-title').textContent='Restore Complete';
+    document.getElementById('rst-msg').textContent='Files restored — server is starting up.';
+    const ic=document.getElementById('rst-icon'); ic.classList.add('done');
+    document.getElementById('rst-icon-restore').style.display='none';
+    document.getElementById('rst-icon-check').style.display='';
+    document.getElementById('restore-close').style.display='';
+    toast('Restore complete','Files restored and server started','ok'); loadBackups(); refreshStatus();
+  }).catch(()=>{
+    setErr('starting');
+    document.getElementById('rst-msg').textContent='Could not start the server.';
+    document.getElementById('restore-close').style.display='';
+  });
+}
+function skipRestoreStart(){
+  if(rstCountdownTimer){ clearTimeout(rstCountdownTimer); rstCountdownTimer=null; }
+  document.getElementById('rst-action-bar').style.display='none';
+  setDone('done');
+  document.getElementById('rst-title').textContent='Restore Complete';
+  document.getElementById('rst-msg').textContent='Files restored — server was not started.';
+  const ic=document.getElementById('rst-icon'); ic.classList.add('done');
+  document.getElementById('rst-icon-restore').style.display='none';
+  document.getElementById('rst-icon-check').style.display='';
+  document.getElementById('restore-close').style.display='';
+  toast('Restore complete','Files restored — server not started','ok'); loadBackups(); refreshStatus();
 }
 function applyRestoreProgress(p){
   const s=(p&&p.step)||'';
@@ -1099,9 +1251,15 @@ function applyRestoreProgress(p){
   if(s==='stopping'){ setDone('locking'); setActive('stopping'); }
   if(s==='replacing'){ setDone('locking'); setDone('stopping'); setActive('replacing'); }
   if(s==='unlocking'){ setDone('locking'); setDone('stopping'); setDone('replacing'); setActive('unlocking'); }
-  if(s==='starting'){ setDone('locking'); setDone('stopping'); setDone('replacing'); setDone('unlocking'); setActive('starting'); }
-  if(s==='done'){ setDone('locking'); setDone('stopping'); setDone('replacing'); setDone('unlocking'); setDone('starting'); setDone('done'); document.getElementById('restore-sub').textContent='Completed'; document.getElementById('restore-close').disabled=false; toast('Restore complete','Files restored and server started','ok'); loadBackups(); refreshStatus(); }
-  if(s==='error'){ setErr('locking'); document.getElementById('restore-sub').textContent=String(p.error||'Error'); document.getElementById('restore-close').disabled=false; showRestoreError(String(p.error||'Restore failed')); toast('Error',String(p.error||'Restore failed'),'err'); }
+  if(s==='done'){ startRestoreCountdown(); }
+  if(s==='error'){
+    setErr('locking');
+    document.getElementById('rst-title').textContent='Restore Failed';
+    document.getElementById('rst-msg').textContent=String(p.error||'An error occurred.');
+    const ic=document.getElementById('rst-icon'); ic.classList.add('error');
+    document.getElementById('restore-close').style.display='';
+    showRestoreError(String(p.error||'Restore failed')); toast('Error',String(p.error||'Restore failed'),'err');
+  }
 }
 function pollRestore(jobId, restoreButton){
   if(!jobId) return;
@@ -1128,6 +1286,12 @@ function pollRestore(jobId, restoreButton){
 
 document.getElementById('restore-close').addEventListener('click',closeRestoreModal);
 document.getElementById('restore-error-close').addEventListener('click',()=>document.getElementById('restore-error-modal').classList.remove('show'));
+document.getElementById('rst-btn-start-now').addEventListener('click', triggerRestoreStart);
+document.getElementById('rst-btn-skip').addEventListener('click', skipRestoreStart);
+[document.getElementById('rst-btn-start-now'),document.getElementById('rst-btn-skip')].forEach(b=>{
+  b.addEventListener('mouseenter', pauseCountdown);
+  b.addEventListener('mouseleave', resumeCountdown);
+});
 const restoreSocket=ensureSocket();
 if(restoreSocket) restoreSocket.on('restore_progress',applyRestoreProgress);
 
@@ -1188,7 +1352,7 @@ function motdToHtml(raw){
 }
 
 /* ---- settings ---- */
-const ids=['accent_color','auto_restart','restart_delay_sec','auto_start_on_boot','min_ram_mb','max_ram_mb','jvm_extra','scheduled_restart_enabled','scheduled_restart_time','backup_on_restart','backup_keep','discord_server_name','discord_webhook_enabled','discord_webhook_url','discord_notify_start','discord_notify_stop','discord_notify_restart','discord_notify_crash','discord_player_webhook_enabled','discord_player_webhook_url','discord_notify_first_join','discord_notify_join','discord_notify_leave','discord_notify_playtime','discord_notify_achievement','discord_notify_death','discord_chat_webhook_enabled','discord_chat_webhook_url'];
+const ids=['accent_color','favicon','auto_restart','restart_delay_sec','auto_start_on_boot','min_ram_mb','max_ram_mb','jvm_extra','scheduled_restart_enabled','scheduled_restart_time','backup_on_restart','backup_keep','discord_server_name','discord_webhook_enabled','discord_webhook_url','discord_notify_start','discord_notify_stop','discord_notify_restart','discord_notify_crash','discord_player_webhook_enabled','discord_player_webhook_url','discord_notify_first_join','discord_notify_join','discord_notify_leave','discord_notify_playtime','discord_notify_achievement','discord_notify_death','discord_chat_webhook_enabled','discord_chat_webhook_url'];
 const elms={};
 ids.forEach(id=>elms[id]=document.getElementById(id));
 const accentPicker=document.getElementById('accent_color_picker');
@@ -1196,23 +1360,32 @@ const accentPresets=document.getElementById('accent-presets');
 const accentTextModes=[...document.querySelectorAll('input[name="accent_text_mode"]')];
 const HEX_RE=/^#[0-9a-fA-F]{6}$/;
 const PRESETS=[
+  // Dark
+  ['Obsidian','#0f172a'],
+  ['Charcoal','#1e293b'],
+  ['Espresso','#7c2d12'],
+  ['Burgundy','#9f1239'],
+  ['Forest','#14532d'],
+  ['Dark Teal','#134e4a'],
+  ['Navy','#1e3a8a'],
+  ['Midnight','#1e1b4b'],
+  // Vivid
+  ['Crimson','#b91c1c'],
+  ['Night Red','#dc2626'],
   ['Copper','#c2553d'],
+  ['Rose','#db2777'],
+  ['Amber','#d97706'],
   ['Emerald','#2f9e44'],
+  ['Cyan','#0891b2'],
   ['Sapphire','#2563eb'],
   ['Violet','#7c3aed'],
-  ['Rose','#db2777'],
-  ['Night Red','#dc2626'],
-  ['Crimson','#b91c1c'],
-  ['Amber','#d97706'],
   ['Slate','#475569'],
-  ['Cyan','#0891b2'],
+  // Pastel
+  ['Coral','#fca5a5'],
+  ['Blush','#fda4af'],
   ['P. Pink','#f9a8d4'],
   ['Baby','#fbcfe8'],
-  ['Blush','#fda4af'],
-  ['Candy','#f0abfc'],
-  ['Gum','#f472b6'],
   ['Peach','#fdba74'],
-  ['Coral','#fca5a5'],
   ['Cream','#fde68a'],
   ['Lemon','#fef08a'],
   ['Mint','#86efac'],
@@ -1220,10 +1393,12 @@ const PRESETS=[
   ['Seafoam','#99f6e4'],
   ['Powder','#bfdbfe'],
   ['Sky','#93c5fd'],
+  ['Peri','#a5b4fc'],
   ['Lavender','#c4b5fd'],
   ['Lilac','#d8b4fe'],
-  ['Peri','#a5b4fc'],
-  ['Gray','#cbd5e1']
+  ['Candy','#f0abfc'],
+  ['Gum','#f472b6'],
+  ['Gray','#cbd5e1'],
 ];
 
 function accentTextColor(hex){
@@ -1287,6 +1462,68 @@ function renderPresets(){
   });
   updatePresetState();
 }
+const FAVICON_OPTIONS=[
+  {key:'favicon.svg',          label:'Default'},
+  {key:'favicon-mc-grassside.png',  label:'Grass'},
+  {key:'favicon-mc-dirt.png',       label:'Dirt'},
+  {key:'favicon-mc-stone.png',      label:'Stone'},
+  {key:'favicon-mc-deepslate.png',  label:'Deepslate'},
+  {key:'favicon-mc-tuff.png',       label:'Tuff'},
+  {key:'favicon-mc-obsidian.png',   label:'Obsidian'},
+  {key:'favicon-mc-crying.png',     label:'Crying Ob.'},
+  {key:'favicon-mc-sculk.png',      label:'Sculk'},
+  {key:'favicon-mc-amethyst.png',   label:'Amethyst'},
+  {key:'favicon-mc-purpur.png',     label:'Purpur'},
+  {key:'favicon-mc-ice.png',        label:'Packed Ice'},
+  {key:'favicon-mc-diamond.png',    label:'Diamond'},
+  {key:'favicon-mc-netherite.png',  label:'Netherite'},
+  {key:'favicon-mc-emerald.png',    label:'Emerald'},
+  {key:'favicon-mc-gold.png',       label:'Gold'},
+  {key:'favicon-mc-iron.png',       label:'Iron'},
+  {key:'favicon-mc-lapis.png',      label:'Lapis'},
+  {key:'favicon-mc-netherrack.png', label:'Netherrack'},
+  {key:'favicon-mc-magma.png',      label:'Magma'},
+  {key:'favicon-mc-soulsand.png',   label:'Soul Sand'},
+  {key:'favicon-mc-ancient.png',    label:'Anc. Debris'},
+  {key:'favicon-mc-crimson.png',    label:'Crimson'},
+  {key:'favicon-mc-warped.png',     label:'Warped'},
+  {key:'favicon-mc-sand.png',       label:'Sand'},
+  {key:'favicon-rainbow.svg',  label:'Pride'},
+];
+const faviconInput=document.getElementById('favicon');
+const faviconGridEl=document.getElementById('favicon-grid');
+
+function applyFavicon(filename){
+  const allowed=FAVICON_OPTIONS.map(o=>o.key);
+  const safe=allowed.includes(filename)?filename:'favicon.svg';
+  const base=location.protocol==='file:'?'http://127.0.0.1:5003':'';
+  let link=document.querySelector('link[rel="icon"]');
+  if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}
+  link.href=base+'/static/'+safe;
+}
+function updateFaviconState(){
+  const current=faviconInput.value||'favicon.svg';
+  document.querySelectorAll('.favicon-btn').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.favicon===current);
+  });
+}
+function renderFaviconOptions(){
+  faviconGridEl.innerHTML='';
+  const base=location.protocol==='file:'?'http://127.0.0.1:5003':'';
+  FAVICON_OPTIONS.forEach(({key,label})=>{
+    const btn=document.createElement('button');
+    btn.type='button'; btn.className='favicon-btn'; btn.dataset.favicon=key;
+    btn.innerHTML='<img src="'+base+'/static/'+key+'" alt="" width="32" height="32"><span>'+label+'</span>';
+    btn.addEventListener('click',()=>{
+      faviconInput.value=key;
+      applyFavicon(key);
+      updateFaviconState();
+    });
+    faviconGridEl.appendChild(btn);
+  });
+  updateFaviconState();
+}
+
 accentPicker.addEventListener('input',syncAccentFromPicker);
 elms.accent_color.addEventListener('input',()=>{
   const hex=elms.accent_color.value.trim();
@@ -1305,6 +1542,8 @@ function loadSettings(){
     setAccentTextMode(s.accent_text_mode||'auto');
     syncAccentFromText();
     renderPresets();
+    renderFaviconOptions();
+    applyFavicon(s.favicon||'favicon.svg');
     updateDiscordSummary();
   }).catch(e=>toast('Error',e.message||'Failed to load settings','err'));
 }
@@ -1313,6 +1552,9 @@ function saveSettings(){
   Object.keys(elms).forEach(k=>{const e=elms[k];body[k]=e.type==='checkbox'?e.checked:(e.value||'');});
   body.accent_text_mode=getAccentTextMode();
   if(!HEX_RE.test(body.accent_color||'')){toast('Invalid color','Use a hex color like #4f46e5','err');return;}
+  if(body.discord_webhook_enabled        && !(body.discord_webhook_url||'').trim())       {toast('Webhook URL missing','Enter a URL for Server Events or disable the toggle','err');return;}
+  if(body.discord_player_webhook_enabled && !(body.discord_player_webhook_url||'').trim()){toast('Webhook URL missing','Enter a URL for Player Actions or disable the toggle','err');return;}
+  if(body.discord_chat_webhook_enabled   && !(body.discord_chat_webhook_url||'').trim())  {toast('Webhook URL missing','Enter a URL for Chat Log or disable the toggle','err');return;}
   api('/panel-settings-save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(()=>{ toast('Saved','Settings updated','ok'); updateDiscordSummary(); })
     .catch(e=>toast('Error',e.message||'Failed to save','err'));
@@ -1438,7 +1680,7 @@ function renderBackups(list){
       confirmModal('Restore "'+b.name+'"? This will stop the server and replace all files.').then(ok=>{
         if(!ok) return;
         openRestoreModal(); setActive('locking'); btnRs.disabled=true;
-        fetch('/backup-restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:b.name})})
+        fetch('/backup-restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:b.name,auto_start:false})})
           .then(r=>r.ok?r.json():Promise.reject())
           .then(j=>{ if(!(j&&j.ok)) throw new Error('Restore failed'); pollRestore(j.job_id, btnRs); })
           .catch(()=>{ applyRestoreProgress({step:'error',error:'Restore failed to start'}); btnRs.disabled=false; });
@@ -1524,13 +1766,16 @@ function updateDiscordSummary(){
   const svOn=elms.discord_webhook_enabled&&elms.discord_webhook_enabled.checked;
   const plOn=elms.discord_player_webhook_enabled&&elms.discord_player_webhook_enabled.checked;
   const chOn=elms.discord_chat_webhook_enabled&&elms.discord_chat_webhook_enabled.checked;
-  if(!svOn&&!plOn&&!chOn){ el.textContent='Not configured'; return; }
+  if(!svOn&&!plOn&&!chOn){ el.textContent='Not configured'; el.classList.remove('configured'); return; }
+  if(svOn&&plOn&&chOn){ el.textContent='All notifications active'; el.classList.add('configured'); return; }
   const parts=[];
   if(svOn) parts.push('Server events active');
   if(plOn) parts.push('Player actions active');
   if(chOn) parts.push('Chat log active');
   el.textContent=parts.join(' · ');
+  el.classList.add('configured');
 }
+
 
 /* ---- wire up ---- */
 document.getElementById('btn-save').addEventListener('click',saveSettings);

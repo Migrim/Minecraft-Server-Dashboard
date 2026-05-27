@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <clipPath id="bg"><rect width="32" height="32" rx="7"/></clipPath>
+  </defs>
+  <g clip-path="url(#bg)">
+    <rect width="32" height="32" fill="#1a0800"/>
+    <rect y="10" width="32" height="2" fill="#d84800"/>
+    <rect y="11" width="14" height="1" fill="#a83400"/>
+    <rect x="18" y="11" width="14" height="1" fill="#a83400"/>
+    <rect y="21" width="32" height="2" fill="#d84800"/>
+    <rect y="22" width="10" height="1" fill="#a83400"/>
+    <rect x="22" y="22" width="10" height="1" fill="#a83400"/>
+    <rect x="10" width="2" height="32" fill="#d84800"/>
+    <rect x="11" width="1" height="10" fill="#a83400"/>
+    <rect x="11" y="12" width="1" height="9" fill="#a83400"/>
+    <rect x="21" width="2" height="32" fill="#d84800"/>
+    <rect x="22" y="0" width="1" height="21" fill="#a83400"/>
+    <rect x="22" y="23" width="1" height="9" fill="#a83400"/>
+  </g>
+  <g fill="none" stroke="#fff8f3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 6 6 11v10l10 5 10-5V11z"/>
+    <path d="M6 11l10 5 10-5"/>
+    <path d="M16 16v10"/>
+  </g>
+</svg>

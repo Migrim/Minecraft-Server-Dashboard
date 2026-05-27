@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <clipPath id="bg">
+      <rect width="32" height="32" rx="7"/>
+    </clipPath>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#000" flood-opacity="0.65"/>
+    </filter>
+  </defs>
+  <g clip-path="url(#bg)">
+    <rect y="0"     width="32" height="5.34" fill="#E40303"/>
+    <rect y="5.34"  width="32" height="5.33" fill="#FF8C00"/>
+    <rect y="10.67" width="32" height="5.33" fill="#FFED00"/>
+    <rect y="16"    width="32" height="5.33" fill="#008026"/>
+    <rect y="21.33" width="32" height="5.34" fill="#004DFF"/>
+    <rect y="26.67" width="32" height="5.33" fill="#750787"/>
+  </g>
+  <g fill="none" stroke="#fff8f3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)">
+    <path d="M16 6 6 11v10l10 5 10-5V11z"/>
+    <path d="M6 11l10 5 10-5"/>
+    <path d="M16 16v10"/>
+  </g>
+</svg>

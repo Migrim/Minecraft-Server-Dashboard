@@ -19,6 +19,7 @@ import base64, hashlib, hmac, sqlite3
 import shutil
 import zipfile, tempfile
 import struct
+import gzip
 
 from io import BytesIO
 try:
@@ -69,6 +70,7 @@ PANEL_DEFAULTS = {
     'backup_keep': 5,
     'accent_color': '#c2553d',
     'accent_text_mode': 'auto',
+    'favicon': 'favicon.svg',
     'discord_server_name': '',
     'discord_webhook_enabled': False,
     'discord_webhook_url': '',
@@ -120,6 +122,7 @@ def _append_console(line: str):
     if len(console_output) > MAX_CONSOLE_LINES:
         del console_output[0:len(console_output)-MAX_CONSOLE_LINES]
 players = set()
+player_ips = {}  # username -> IP string
 server_process = None
 SERVER_START_TS = None
 
@@ -215,6 +218,31 @@ def _has_bluemap() -> bool:
                     return True
     return False
 
+_ALLOWED_FAVICONS = {
+    'favicon.svg','favicon-night.svg','favicon-midnight.svg','favicon-navy.svg',
+    'favicon-ocean.svg','favicon-forest.svg','favicon-emerald.svg','favicon-crimson.svg',
+    'favicon-amber.svg','favicon-rose.svg','favicon-violet.svg','favicon-slate.svg',
+    'favicon-rainbow.svg',
+    'favicon-end.svg','favicon-lava.svg','favicon-mesa.svg','favicon-overworld.svg',
+    'favicon-galaxy.svg','favicon-prismarine.svg','favicon-jungle.svg','favicon-void.svg',
+    'favicon-cave.svg','favicon-magma.svg','favicon-deepocean.svg','favicon-warped.svg',
+    'favicon-mc-cherry.png','favicon-mc-netherite.png',
+    'favicon-mc-grassside.png','favicon-mc-dirt.png',
+    'favicon-mc-stone.png','favicon-mc-deepslate.png','favicon-mc-tuff.png',
+    'favicon-mc-obsidian.png','favicon-mc-crying.png','favicon-mc-sculk.png',
+    'favicon-mc-amethyst.png','favicon-mc-purpur.png','favicon-mc-ice.png',
+    'favicon-mc-diamond.png','favicon-mc-dsdiamond.png','favicon-mc-emerald.png',
+    'favicon-mc-gold.png','favicon-mc-iron.png','favicon-mc-lapis.png',
+    'favicon-mc-nethergold.png','favicon-mc-netherrack.png','favicon-mc-magma.png',
+    'favicon-mc-soulsand.png','favicon-mc-ancient.png','favicon-mc-netherite.png',
+    'favicon-mc-crimson.png','favicon-mc-warped.png','favicon-mc-prismarine.png',
+    'favicon-mc-glowstone.png','favicon-mc-endstone.png','favicon-mc-sand.png',
+    'favicon-mc-redsandstone.png','favicon-mc-cherry.png',
+}
+
+def _clean_favicon(value):
+    return value if value in _ALLOWED_FAVICONS else 'favicon.svg'
+
 @app.context_processor
 def inject_feature_flags():
     panel = get_panel_settings()
@@ -227,6 +255,7 @@ def inject_feature_flags():
         'panel_settings': panel,
         'panel_accent_color': accent_color,
         'panel_accent_fg': _accent_foreground(accent_color, accent_text_mode),
+        'panel_favicon': _clean_favicon(panel.get('favicon', 'favicon.svg')),
     }
 
 @app.before_request
@@ -355,11 +384,11 @@ def stop_server_blocking(timeout=90, announce=None, countdown_label='Stopping se
     try:
         try:
             msg = announce or 'The server will shutdown in 10 seconds'
-            server_process.stdin.write(f'/say {msg}\n')
+            server_process.stdin.write(f'say {msg}\n')
             server_process.stdin.flush()
             time.sleep(max(0, lead_delay))
             for remaining in range(int(countdown_from), 0, -1):
-                server_process.stdin.write(f'/say {countdown_label} {remaining}\n')
+                server_process.stdin.write(f'say {countdown_label} {remaining}\n')
                 server_process.stdin.flush()
                 time.sleep(1)
             server_process.stdin.write('stop\n')
@@ -556,7 +585,7 @@ def stop_server_for_restart(timeout=60):
         return
     try:
         for remaining in range(5, 0, -1):
-            server_process.stdin.write(f'/say rebooting in {remaining}\n')
+            server_process.stdin.write(f'say rebooting in {remaining}\n')
             server_process.stdin.flush()
             time.sleep(1)
         server_process.stdin.write('stop\n')
@@ -749,6 +778,7 @@ def backup_restore():
     name = (data.get('name') or '').strip()
     if not name or '/' in name or '\\' in name or not name.endswith('.zip'):
         return jsonify({'ok': False, 'error': 'invalid name'}), 400
+    auto_start = bool(data.get('auto_start', True))
     bdir = backups_dir()
     fp = os.path.join(bdir, name)
     if not os.path.isfile(fp):
@@ -793,11 +823,12 @@ def backup_restore():
             _write_state(phase='stopped', server_running=False)
             set_restore_status('unlocking')
             set_lock(False)
-            set_restore_status('starting')
-            _append_console("[panel] restore: starting server")
-            start_server()
-            if not wait_for_server_started(timeout=180):
-                raise RuntimeError('Backup restored, but server did not finish starting.')
+            if auto_start:
+                set_restore_status('starting')
+                _append_console("[panel] restore: starting server")
+                start_server()
+                if not wait_for_server_started(timeout=180):
+                    raise RuntimeError('Backup restored, but server did not finish starting.')
             set_restore_status('done')
         except Exception as e:
             try:
@@ -1719,11 +1750,11 @@ def stop_server_async():
     global server_process
     if server_process is not None and server_process.stdin:
         try:
-            server_process.stdin.write('/say The server will shutdown in 10 seconds\n')
+            server_process.stdin.write('say The server will shutdown in 10 seconds\n')
             server_process.stdin.flush()
             time.sleep(7)
             for remaining in range(3, 0, -1):
-                server_process.stdin.write(f'/say Stopping server in {remaining} \n')
+                server_process.stdin.write(f'say Stopping server in {remaining}\n')
                 server_process.stdin.flush()
                 time.sleep(1)
             server_process.stdin.write('stop\n')
@@ -1805,11 +1836,18 @@ def cancel_minecraft_start():
     return jsonify({"message": "Minecraft Server startup cancelled."})
 
 def emit_server_output(process):
-    global console_output, players, server_process, SERVER_START_TS, player_join_times
+    global console_output, players, player_ips, server_process, SERVER_START_TS, player_join_times
     for line in iter(process.stdout.readline, ''):
         line_display = line.replace('<', 'ඞ').replace('>', 'ඞ')
         _append_console(line_display)
         socketio.emit('server_output', {'data': line_display})
+
+        # Parse IP from the "logged in" line which precedes "joined the game"
+        ip_match = re.search(r'(\w+)\[/(.+)\] logged in', line)
+        if ip_match:
+            ip_name = ip_match.group(1)
+            addr = ip_match.group(2)
+            player_ips[ip_name] = re.sub(r':\d+$', '', addr)  # strip port
 
         join_match = re.search(r"\[Server thread/INFO\]: (\w+) joined the game", line)
         if join_match:
@@ -1823,6 +1861,7 @@ def emit_server_output(process):
         if leave_match:
             name = leave_match.group(1)
             players.discard(name)
+            player_ips.pop(name, None)
             joined_at = player_join_times.pop(name, None)
             playtime_str = ''
             if joined_at is not None:
@@ -1851,6 +1890,7 @@ def emit_server_output(process):
 
         if "Stopping server" in line:
             players.clear()
+            player_ips.clear()
             player_join_times.clear()
         if re.search(r'\[Server thread/INFO\].*:\s*Done\b', line):
             _write_state(phase='running', server_running=True)
@@ -1858,6 +1898,7 @@ def emit_server_output(process):
     rc = process.poll()
     save_server_status(False)
     players.clear()
+    player_ips.clear()
     server_process = None
     SERVER_START_TS = None
     _append_console(f"Server process exited with code {rc}")
@@ -1925,9 +1966,150 @@ def deop_player():
     player = request.json['player']
     return send_server_command(f'deop {player}')
 
+@app.route('/gamemode', methods=['POST'])
+def set_gamemode():
+    player = request.json['player']
+    mode = request.json.get('mode', '')
+    if mode not in ('survival', 'creative', 'adventure', 'spectator'):
+        return jsonify({'error': 'invalid mode'}), 400
+    return send_server_command(f'gamemode {mode} {player}')
+
+def _get_player_uuid(name):
+    usercache = os.path.join(server_files_dir, 'usercache.json')
+    try:
+        with open(usercache) as f:
+            cache = json.load(f)
+        for entry in cache:
+            if entry.get('name', '').lower() == name.lower():
+                return entry.get('uuid', '')
+    except Exception:
+        pass
+    return None
+
+def _skip_nbt_value(data, pos, tag_type):
+    if tag_type == 1:  return pos + 1
+    if tag_type == 2:  return pos + 2
+    if tag_type == 3:  return pos + 4
+    if tag_type == 4:  return pos + 8
+    if tag_type == 5:  return pos + 4
+    if tag_type == 6:  return pos + 8
+    if tag_type == 7:
+        l = struct.unpack('>i', data[pos:pos+4])[0]; return pos + 4 + max(0, l)
+    if tag_type == 8:
+        l = struct.unpack('>H', data[pos:pos+2])[0]; return pos + 2 + l
+    if tag_type == 9:
+        et = data[pos]; ec = struct.unpack('>i', data[pos+1:pos+5])[0]; pos += 5
+        for _ in range(max(0, ec)): pos = _skip_nbt_value(data, pos, et)
+        return pos
+    if tag_type == 10:
+        while pos < len(data):
+            t = data[pos]; pos += 1
+            if t == 0: break
+            nl = struct.unpack('>H', data[pos:pos+2])[0]; pos += 2 + nl
+            pos = _skip_nbt_value(data, pos, t)
+        return pos
+    if tag_type == 11:
+        l = struct.unpack('>i', data[pos:pos+4])[0]; return pos + 4 + max(0, l) * 4
+    if tag_type == 12:
+        l = struct.unpack('>i', data[pos:pos+4])[0]; return pos + 4 + max(0, l) * 8
+    return pos
+
+def _parse_player_inventory(uuid_with_dashes):
+    """Parse Inventory list from player .dat file. Tries Spigot and vanilla paths."""
+    paths = [
+        os.path.join(server_files_dir, 'world', 'players', 'data', f'{uuid_with_dashes}.dat'),
+        os.path.join(server_files_dir, 'world', 'playerdata', f'{uuid_with_dashes}.dat'),
+    ]
+    data = None
+    for p in paths:
+        try:
+            with gzip.open(p, 'rb') as f: data = f.read()
+            break
+        except Exception: continue
+    if data is None:
+        return None
+
+    search = bytes([9, 0, 9]) + b'Inventory'
+    idx = data.find(search)
+    if idx == -1:
+        return []
+
+    pos = idx + 3 + 9
+    elem_type = data[pos]
+    count = struct.unpack('>i', data[pos+1:pos+5])[0]
+    pos += 5
+
+    if elem_type != 10 or count <= 0 or count > 200:
+        return []
+
+    items = []
+    for _ in range(count):
+        item = {}
+        while pos < len(data):
+            t = data[pos]; pos += 1
+            if t == 0: break
+            nl = struct.unpack('>H', data[pos:pos+2])[0]; pos += 2
+            name = data[pos:pos+nl].decode('utf-8', errors='replace'); pos += nl
+            if t == 1:
+                item[name] = struct.unpack('>b', data[pos:pos+1])[0]; pos += 1
+            elif t == 8:
+                sl = struct.unpack('>H', data[pos:pos+2])[0]; pos += 2
+                item[name] = data[pos:pos+sl].decode('utf-8', errors='replace'); pos += sl
+            else:
+                pos = _skip_nbt_value(data, pos, t)
+        if 'id' in item and 'Slot' in item:
+            items.append({'id': item['id'], 'count': int(item.get('Count', 1)), 'slot': int(item['Slot'])})
+    return items
+
+@app.route('/player-inventory', methods=['POST'])
+def player_inventory():
+    name = request.json['player']
+    uid = _get_player_uuid(name)
+    if not uid:
+        return jsonify({'error': f'UUID not found for {name}'}), 404
+    items = _parse_player_inventory(uid)
+    if items is None:
+        return jsonify({'error': 'Player data file not found'}), 404
+    return jsonify({'items': items})
+
+def _read_spawn_coords():
+    """Read SpawnX/Y/Z from level.dat. Falls back to 0/64/0."""
+    level_dat = os.path.join(server_files_dir, 'world', 'level.dat')
+    try:
+        with gzip.open(level_dat, 'rb') as f:
+            data = f.read()
+        coords = {}
+        for key in (b'SpawnX', b'SpawnY', b'SpawnZ'):
+            tag = bytes([3, 0, len(key)]) + key
+            idx = data.find(tag)
+            if idx != -1:
+                coords[key.decode()] = struct.unpack('>i', data[idx + 3 + len(key):idx + 7 + len(key)])[0]
+        return coords.get('SpawnX', 0), coords.get('SpawnY', 64), coords.get('SpawnZ', 0)
+    except Exception:
+        return 0, 64, 0
+
+@app.route('/tp-spawn', methods=['POST'])
+def tp_spawn():
+    player = request.json['player']
+    x, y, z = _read_spawn_coords()
+    return send_server_command(f'tp {player} {x} {y} {z}')
+
+@app.route('/clear-inv', methods=['POST'])
+def clear_inv():
+    player = request.json['player']
+    return send_server_command(f'clear {player}')
+
+@app.route('/whitelist-action', methods=['POST'])
+def whitelist_action():
+    player = request.json['player']
+    action = request.json.get('action', '')
+    if action not in ('add', 'remove'):
+        return jsonify({'error': 'invalid action'}), 400
+    return send_server_command(f'whitelist {action} {player}')
+
 @app.route('/get-players')
 def get_players():
-    return jsonify(list(players))
+    return jsonify([{'name': n, 'ip': player_ips.get(n)} for n in players])
 
 @app.route('/get-console-output')
 def get_console_output():

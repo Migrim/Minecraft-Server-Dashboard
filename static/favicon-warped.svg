@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <clipPath id="bg"><rect width="32" height="32" rx="7"/></clipPath>
+  </defs>
+  <g clip-path="url(#bg)">
+    <rect width="32" height="32" fill="#0e1a18"/>
+    <rect y="0"  width="32" height="5"  fill="#1a3a34"/>
+    <rect y="9"  width="32" height="4"  fill="#1e5040"/>
+    <rect y="18" width="32" height="5"  fill="#1a3a34"/>
+    <rect y="27" width="32" height="5"  fill="#2a7060"/>
+    <rect x="4"  y="5"  width="1" height="1" fill="#3aaa88"/>
+    <rect x="18" y="7"  width="1" height="1" fill="#3aaa88"/>
+    <rect x="9"  y="14" width="1" height="1" fill="#2e9070"/>
+    <rect x="25" y="15" width="1" height="1" fill="#3aaa88"/>
+    <rect x="3"  y="24" width="1" height="1" fill="#2e9070"/>
+    <rect x="20" y="23" width="1" height="1" fill="#3aaa88"/>
+  </g>
+  <g fill="none" stroke="#fff8f3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 6 6 11v10l10 5 10-5V11z"/>
+    <path d="M6 11l10 5 10-5"/>
+    <path d="M16 16v10"/>
+  </g>
+</svg>

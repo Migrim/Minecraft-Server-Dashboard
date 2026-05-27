@@ -148,6 +148,8 @@
   .modal-btn-cancel:hover { background:var(--bg-soft); color:var(--text); }
   .modal-btn-ok { background:var(--accent); color:var(--accent-fg-on); box-shadow:0 1px 0 rgba(255,255,255,.15) inset; }
   .modal-btn-ok:hover { background:var(--accent-hover); }
+  .modal-btn-danger { background:#dc2626; color:#fff; box-shadow:0 1px 0 rgba(255,255,255,.15) inset; }
+  .modal-btn-danger:hover { background:#b91c1c; }
 
   /* ---------- find bar ---------- */
   .find-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px 14px; background:var(--surface); border-bottom:1px solid var(--border); overflow:hidden; max-height:48px; opacity:1; transition:max-height .18s ease, opacity .18s ease, padding .18s ease, border-bottom-width .18s ease; }
@@ -290,13 +292,17 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     Rename
   </div>
+  <div class="item hidden" id="ctx-move-root">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Move to root
+  </div>
   <div class="item" id="ctx-newfolder">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
     New folder
   </div>
   <div class="item" id="ctx-delete">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-    Delete
+    <span id="ctx-delete-label">Delete</span>
   </div>
 </div>
 <div class="ctx" id="editor-ctx">
@@ -510,6 +516,7 @@ const ctxDownload  = document.getElementById('ctx-download');
 const ctxDelete    = document.getElementById('ctx-delete');
 const ctxUpload    = document.getElementById('ctx-upload');
 const ctxRename    = document.getElementById('ctx-rename');
+const ctxMoveRoot  = document.getElementById('ctx-move-root');
 const ctxNewfolder = document.getElementById('ctx-newfolder');
 const uploadInput  = document.getElementById('uploadInput');
 const uploadBtn    = document.getElementById('uploadBtn');
@@ -522,6 +529,7 @@ const editToggle   = document.getElementById('edit-toggle');
 const edEditWrap   = document.getElementById('ed-edit-wrap');
 const editGutterEl = document.getElementById('edit-gutter');
 const noPreviewEl  = document.getElementById('no-preview');
+const workEl       = document.querySelector('.work');
 const tabsBarEl    = document.getElementById('editor-tabs');
 const tabsEmptyEl  = document.getElementById('tabs-empty');
 const edLang       = document.getElementById('ed-lang');
@@ -534,6 +542,8 @@ let openedIsBinary = false;
 let openedIsImage = false;
 let ctxTarget = null;
 let expandedPaths = new Set();
+let selectedPaths = new Set();
+let lastClickPath = null;
 
 /* ---- tab state ---- */
 let tabs = {};      // tabId → {path, content, binary, image, scrollPos, meta}
@@ -720,25 +730,69 @@ function humanSize(n) {
 }
 
 function deselectRows() {
-  treeEl.querySelectorAll('.row.file.selected').forEach(r => {
+  treeEl.querySelectorAll('.row.selected').forEach(r => {
     r.classList.remove('selected');
     const m = r.querySelector('.meta'); if (m) m.textContent = '';
   });
-  treeEl.querySelectorAll('.row.folder.selected').forEach(r => r.classList.remove('selected'));
   const dlSizeEl = document.getElementById('dl-size');
   if (dlSizeEl) dlSizeEl.textContent = '';
+  selectedPaths.clear();
+  lastClickPath = null;
 }
 
 function selectRow(path, size) {
   const row = treeEl.querySelector(`.row[data-path="${CSS.escape(path)}"]`);
   if (!row) return;
   row.classList.add('selected');
+  selectedPaths.add(path);
+  lastClickPath = path;
   const dlSizeEl = document.getElementById('dl-size');
   if (size && row.dataset.type === 'file') {
     const m = row.querySelector('.meta'); if (m) m.textContent = humanSize(size);
     if (dlSizeEl) dlSizeEl.textContent = ' · ' + humanSize(size);
   } else if (dlSizeEl && !size) {
     dlSizeEl.textContent = '';
+  }
+}
+
+function addSel(path) {
+  selectedPaths.add(path);
+  const row = treeEl.querySelector(`.row[data-path="${CSS.escape(path)}"]`);
+  if (row) row.classList.add('selected');
+}
+
+function removeSel(path) {
+  selectedPaths.delete(path);
+  const row = treeEl.querySelector(`.row[data-path="${CSS.escape(path)}"]`);
+  if (row) row.classList.remove('selected');
+}
+
+function toggleSel(path) {
+  if (selectedPaths.has(path)) removeSel(path); else addSel(path);
+}
+
+function getVisibleRows() {
+  return [...treeEl.querySelectorAll('.row')].filter(r => {
+    let n = r.parentElement;
+    while (n && n !== treeEl) {
+      if (n.tagName === 'UL' && n.classList.contains('hidden')) return false;
+      n = n.parentElement;
+    }
+    return true;
+  });
+}
+
+function selectRange(anchorPath, targetPath) {
+  const rows = getVisibleRows();
+  const idxA = rows.findIndex(r => r.dataset.path === anchorPath);
+  const idxT = rows.findIndex(r => r.dataset.path === targetPath);
+  if (idxA < 0 || idxT < 0) { addSel(targetPath); return; }
+  const lo = Math.min(idxA, idxT), hi = Math.max(idxA, idxT);
+  deselectRows();
+  lastClickPath = anchorPath;
+  for (let i = lo; i <= hi; i++) {
+    const p = rows[i].dataset.path;
+    if (p) addSel(p);
   }
 }
 
@@ -750,12 +804,39 @@ function clearTreeDropState() {
   treeEl.querySelectorAll('.tree-dragging').forEach(r => r.classList.remove('tree-dragging'));
 }
 
-function isValidTreeDrop(srcPath, dstDir) {
-  if (!srcPath) return false;
-  if (srcPath === dstDir) return false;
-  if (dstDir !== '' && dstDir.startsWith(srcPath + '/')) return false;
-  if (dirname(srcPath) === dstDir) return false;
-  return true;
+function isValidTreeDrop(srcPaths, dstDir) {
+  return srcPaths.every(srcPath => {
+    if (!srcPath) return false;
+    if (srcPath === dstDir) return false;
+    if (dstDir !== '' && dstDir.startsWith(srcPath + '/')) return false;
+    if (dirname(srcPath) === dstDir) return false;
+    return true;
+  });
+}
+
+async function moveMultiple(paths, dstDir) {
+  let failures = 0;
+  for (const srcPath of paths) {
+    try {
+      const j = await api('/fs-move', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({src:srcPath, dst_dir:dstDir})});
+      if (j.ok) {
+        const newBase = dstDir ? joinPath(dstDir, basename(srcPath)) : basename(srcPath);
+        Object.keys(tabs).forEach(id => {
+          const tp = tabs[id].path;
+          if (tp === srcPath || tp.startsWith(srcPath + '/')) {
+            const newPath = newBase + tp.slice(srcPath.length);
+            tabs[id].path = newPath;
+            const lbl = tabsBarEl.querySelector(`[data-tab-id="${id}"] .tab-label`);
+            if (lbl) lbl.textContent = basename(newPath);
+            if (activeTabId === id) { openedPath = newPath; pathEl.textContent = newPath; }
+          }
+        });
+      } else failures++;
+    } catch { failures++; }
+  }
+  loadTree();
+  if (failures === 0) toast('Moved', `${paths.length} items moved`, 'ok');
+  else toast('Error', `${failures} item(s) failed to move`, 'err');
 }
 
 function movePath(srcPath, dstDir) {
@@ -784,10 +865,18 @@ function bindDragSource(row, path, type) {
   row.draggable = true;
   row.addEventListener('dragstart', e => {
     if (e.target.closest('input,button')) { e.preventDefault(); return; }
-    dragSrc = {path, type};
+    const paths = selectedPaths.has(path) && selectedPaths.size > 1
+      ? [...selectedPaths]
+      : [path];
+    dragSrc = {paths};
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-tree', path);
-    requestAnimationFrame(() => row.classList.add('tree-dragging'));
+    e.dataTransfer.setData('application/x-tree', paths[0]);
+    requestAnimationFrame(() => {
+      paths.forEach(p => {
+        const r = treeEl.querySelector(`.row[data-path="${CSS.escape(p)}"]`);
+        if (r) r.classList.add('tree-dragging');
+      });
+    });
   });
   row.addEventListener('dragend', () => { dragSrc = null; clearTreeDropState(); });
 }
@@ -795,7 +884,7 @@ function bindDragSource(row, path, type) {
 function bindDropTarget(row, path, kidsUl) {
   let dc = 0, dTimer = null;
   row.addEventListener('dragenter', e => {
-    if (!dragSrc || !isValidTreeDrop(dragSrc.path, path)) return;
+    if (!dragSrc || !isValidTreeDrop(dragSrc.paths, path)) return;
     e.preventDefault(); dc++;
     row.classList.add('tree-drop-over');
     if (!dTimer && kidsUl && kidsUl.classList.contains('hidden')) {
@@ -806,7 +895,7 @@ function bindDropTarget(row, path, kidsUl) {
     }
   });
   row.addEventListener('dragover', e => {
-    if (!dragSrc || !isValidTreeDrop(dragSrc.path, path)) return;
+    if (!dragSrc || !isValidTreeDrop(dragSrc.paths, path)) return;
     e.preventDefault(); e.dataTransfer.dropEffect = 'move';
   });
   row.addEventListener('dragleave', () => {
@@ -816,9 +905,10 @@ function bindDropTarget(row, path, kidsUl) {
   row.addEventListener('drop', e => {
     e.preventDefault(); dc = 0; clearTimeout(dTimer); dTimer = null;
     row.classList.remove('tree-drop-over');
-    if (!dragSrc || !isValidTreeDrop(dragSrc.path, path)) return;
-    const src = dragSrc.path; dragSrc = null;
-    movePath(src, path);
+    if (!dragSrc || !isValidTreeDrop(dragSrc.paths, path)) return;
+    const paths = dragSrc.paths; dragSrc = null;
+    if (paths.length === 1) movePath(paths[0], path);
+    else moveMultiple(paths, path);
   });
 }
 
@@ -854,11 +944,18 @@ function drawTree(data) {
         const isOpen = expandedPaths.has(item.path);
         const kids = el('ul', {className: isOpen ? '' : 'hidden'});
         if (isOpen) row.classList.add('open');
-        row.addEventListener('click', () => {
-          const open = kids.classList.toggle('hidden') === false;
-          row.classList.toggle('open', open);
-          if (open) expandedPaths.add(item.path); else expandedPaths.delete(item.path);
-          selectDir(item.path);
+        row.addEventListener('click', e => {
+          if (e.metaKey || e.ctrlKey) {
+            toggleSel(item.path); lastClickPath = item.path;
+          } else if (e.shiftKey && lastClickPath) {
+            selectRange(lastClickPath, item.path);
+          } else {
+            const open = kids.classList.toggle('hidden') === false;
+            row.classList.toggle('open', open);
+            if (open) expandedPaths.add(item.path); else expandedPaths.delete(item.path);
+            deselectRows(); addSel(item.path); lastClickPath = item.path;
+            selectDir(item.path);
+          }
         });
         li.appendChild(row);
         addBranch(kids, item.children || [], false);
@@ -868,7 +965,16 @@ function drawTree(data) {
         bindDropTarget(row, item.path, kids);
       } else {
         const row = nodeRow(item, false);
-        row.addEventListener('click', () => openFile(item.path));
+        row.addEventListener('click', e => {
+          if (e.metaKey || e.ctrlKey) {
+            toggleSel(item.path); lastClickPath = item.path;
+          } else if (e.shiftKey && lastClickPath) {
+            selectRange(lastClickPath, item.path);
+          } else {
+            deselectRows(); selectRow(item.path, item.size);
+            openFile(item.path);
+          }
+        });
         row.addEventListener('dblclick', () => startInlineRename(item.path));
         li.appendChild(row);
         makeDropHandlers(item.path, row, false, null);
@@ -879,6 +985,10 @@ function drawTree(data) {
   }
   addBranch(root, data, true);
   treeEl.appendChild(root);
+  selectedPaths.forEach(p => {
+    const r = treeEl.querySelector(`.row[data-path="${CSS.escape(p)}"]`);
+    if (r) r.classList.add('selected');
+  });
 }
 
 function filterTree() {
@@ -1003,6 +1113,20 @@ function deletePath(p) {
     .catch(err => toast('Error', err.message || 'Delete failed', 'err'));
 }
 
+async function deleteMultiple(paths) {
+  let failures = 0;
+  for (const p of paths) {
+    try {
+      const j = await api('/fs-delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:p})});
+      if (j.ok) Object.keys(tabs).forEach(id => { if (tabs[id].path === p || tabs[id].path.startsWith(p+'/')) closeTab(id); });
+      else failures++;
+    } catch { failures++; }
+  }
+  loadTree();
+  if (failures === 0) toast('Deleted', `${paths.length} items removed`, 'ok');
+  else toast('Error', `${failures} item(s) failed to delete`, 'err');
+}
+
 function renamePath(oldPath, newName) {
   return api('/fs-rename', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:oldPath, new_name:newName})})
     .then(j => {
@@ -1069,19 +1193,39 @@ function showCtx(x, y, p, t) {
   const cr = ctx.getBoundingClientRect();
   ctx.style.left = Math.min(x, window.innerWidth  - cr.width  - 8) + 'px';
   ctx.style.top  = Math.min(y, window.innerHeight - cr.height - 8) + 'px';
-  ctxDownload.classList.toggle('disabled', t !== 'file' && t !== 'dir');
+  const multi = selectedPaths.size > 1;
+  ctxDownload.classList.toggle('disabled', multi || (t !== 'file' && t !== 'dir'));
   document.getElementById('ctx-download-label').textContent = t === 'dir' ? 'Download as .zip' : 'Download';
-  ctxOpen.classList.toggle('disabled', t !== 'file');
-  ctxNewTab.classList.toggle('disabled', t !== 'file');
-  ctxRename.classList.toggle('disabled', !p || t === 'root');
+  ctxOpen.classList.toggle('disabled', multi || t !== 'file');
+  ctxNewTab.classList.toggle('disabled', multi || t !== 'file');
+  ctxRename.classList.toggle('disabled', multi || !p || t === 'root');
+  ctxDelete.classList.toggle('disabled', !p || t === 'root');
+  document.getElementById('ctx-delete-label').textContent = multi ? `Delete ${selectedPaths.size} items` : 'Delete';
+  ctxMoveRoot.classList.toggle('hidden', multi || !p || !p.includes('/'));
 }
 function hideCtx() { ctx.style.display = 'none'; ctxTarget = null; }
 
 treeEl.addEventListener('contextmenu', e => {
   e.preventDefault();
+  e.stopPropagation();
   const row = e.target.closest('.row');
-  if (row) showCtx(e.clientX, e.clientY, row.dataset.path, row.dataset.type);
-  else     showCtx(e.clientX, e.clientY, "", "root");
+  if (row) {
+    const path = row.dataset.path;
+    if (!selectedPaths.has(path)) {
+      deselectRows();
+      addSel(path);
+      lastClickPath = path;
+    }
+    showCtx(e.clientX, e.clientY, path, row.dataset.type);
+  } else {
+    deselectRows();
+    showCtx(e.clientX, e.clientY, "", "root");
+  }
+});
+workEl.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  hideEditorCtx();
+  showCtx(e.clientX, e.clientY, "", "root");
 });
 document.addEventListener('click', e => { if (!ctx.contains(e.target)) hideCtx(); });
 window.addEventListener('scroll', hideCtx, {passive:true});
@@ -1090,13 +1234,37 @@ window.addEventListener('resize', hideCtx);
 ctxOpen.addEventListener('click',      () => { if (ctxTarget?.type === 'file') openFileInTab(ctxTarget.path, false); hideCtx(); });
 ctxNewTab.addEventListener('click',    () => { if (ctxTarget?.type === 'file') openFileInTab(ctxTarget.path, true);  hideCtx(); });
 ctxDownload.addEventListener('click',  () => { if (ctxTarget) downloadPath(ctxTarget.path); hideCtx(); });
-ctxDelete.addEventListener('click',    () => { if (ctxTarget) deletePath(ctxTarget.path); hideCtx(); });
+ctxDelete.addEventListener('click', async () => {
+  if (!ctxTarget || ctxDelete.classList.contains('disabled')) { hideCtx(); return; }
+  const multi = selectedPaths.size > 1;
+  const paths = multi ? [...selectedPaths] : [ctxTarget.path];
+  const { path, type } = ctxTarget;
+  hideCtx();
+  if (multi) {
+    const confirmed = await showConfirmModal(
+      `Delete ${paths.length} items?`,
+      'This will permanently delete all selected files and folders.',
+      'Delete', false
+    );
+    if (confirmed) deleteMultiple(paths);
+  } else {
+    const name = path.split('/').pop() || path;
+    const isDir = type === 'dir';
+    const confirmed = await showConfirmModal(
+      isDir ? `Delete folder "${name}"?` : `Delete "${name}"?`,
+      isDir ? 'This will permanently delete the folder and all its contents.' : 'This file will be permanently deleted.',
+      'Delete', true
+    );
+    if (confirmed) deletePath(path);
+  }
+});
 ctxUpload.addEventListener('click',    () => {
   if (!ctxTarget) return;
   selectDir(ctxTarget.type === 'dir' ? ctxTarget.path : dirname(ctxTarget.path));
   uploadInput.click(); hideCtx();
 });
 ctxRename.addEventListener('click',    () => { if (ctxTarget) startInlineRename(ctxTarget.path); hideCtx(); });
+ctxMoveRoot.addEventListener('click',  () => { if (ctxTarget?.path) { movePath(ctxTarget.path, ''); } hideCtx(); });
 ctxNewfolder.addEventListener('click', async () => {
   if (!ctxTarget) return;
   const base = ctxTarget.type === 'dir' ? ctxTarget.path : (ctxTarget.type === 'file' ? dirname(ctxTarget.path) : "");
@@ -1145,7 +1313,14 @@ function showEditorCtx(x, y) {
 function hideEditorCtx() { editorCtx.style.display = 'none'; }
 
 [edEditWrap, viewGrid].forEach(el => {
-  el.addEventListener('contextmenu', e => { e.preventDefault(); hideCtx(); showEditorCtx(e.clientX, e.clientY); });
+  el.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); hideCtx(); showEditorCtx(e.clientX, e.clientY); });
+});
+imgView.addEventListener('contextmenu', e => {
+  if (!openedPath) return;
+  e.preventDefault(); e.stopPropagation();
+  hideEditorCtx();
+  deselectRows(); addSel(openedPath); lastClickPath = openedPath;
+  showCtx(e.clientX, e.clientY, openedPath, 'file');
 });
 document.addEventListener('click', e => { if (!editorCtx.contains(e.target)) hideEditorCtx(); });
 
@@ -1376,6 +1551,46 @@ function showPromptModal(title, placeholder, sub = '', defaultVal = '') {
     modalOkEl.addEventListener('click', onOk);
     modalCancelEl.addEventListener('click', onCancel);
     modalInputEl.addEventListener('keydown', onKey);
+    modalOverlayEl.addEventListener('click', onBackdrop);
+  });
+}
+
+function showConfirmModal(title, sub = '', okLabel = 'Confirm', danger = false) {
+  return new Promise(resolve => {
+    modalTitleEl.textContent = title;
+    modalSubEl.textContent   = sub;
+    modalSubEl.style.display = sub ? '' : 'none';
+    modalInputEl.style.display = 'none';
+    modalOkEl.textContent    = okLabel;
+    modalOkEl.className      = 'modal-btn ' + (danger ? 'modal-btn-danger' : 'modal-btn-ok');
+    modalOverlayEl.classList.remove('hidden');
+    const card = document.getElementById('modal-card');
+    card.style.animation = 'none';
+    requestAnimationFrame(() => { card.style.animation = ''; });
+    setTimeout(() => modalOkEl.focus(), 30);
+
+    function finish(val) {
+      modalInputEl.style.display = '';
+      modalOkEl.className = 'modal-btn modal-btn-ok';
+      modalOverlayEl.classList.add('hidden');
+      cleanup(); resolve(val);
+    }
+    function onOk()     { finish(true); }
+    function onCancel() { finish(false); }
+    function onKey(e) {
+      if (e.key === 'Enter')  { e.preventDefault(); onOk(); }
+      if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+    }
+    function onBackdrop(e) { if (e.target === modalOverlayEl) onCancel(); }
+    function cleanup() {
+      modalOkEl.removeEventListener('click', onOk);
+      modalCancelEl.removeEventListener('click', onCancel);
+      document.removeEventListener('keydown', onKey);
+      modalOverlayEl.removeEventListener('click', onBackdrop);
+    }
+    modalOkEl.addEventListener('click', onOk);
+    modalCancelEl.addEventListener('click', onCancel);
+    document.addEventListener('keydown', onKey);
     modalOverlayEl.addEventListener('click', onBackdrop);
   });
 }

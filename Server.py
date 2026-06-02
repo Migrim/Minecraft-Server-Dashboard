@@ -1837,19 +1837,25 @@ def cancel_minecraft_start():
 
 def emit_server_output(process):
     global console_output, players, player_ips, server_process, SERVER_START_TS, player_join_times
+    # Anchored prefix — must match from the start of the line so chat messages
+    # containing fake server lines (e.g. "<player> X joined the game") can't spoof events.
+    # Handles vanilla "[Server thread/INFO]: " and NeoForge "[Server thread/INFO] [module/Class]: "
+    _TS = r'^\[\d+:\d+:\d+\] '
+    _I  = r"\[Server thread/INFO\](?:\s*\[[^\]]*\])?: "
+    _LI = _TS + _I  # full anchored prefix
     for line in iter(process.stdout.readline, ''):
         line_display = line.replace('<', 'ඞ').replace('>', 'ඞ')
         _append_console(line_display)
         socketio.emit('server_output', {'data': line_display})
 
         # Parse IP from the "logged in" line which precedes "joined the game"
-        ip_match = re.search(r'(\w+)\[/(.+)\] logged in', line)
+        ip_match = re.search(r'(\w+)\[/(.+?)\] logged in', line)
         if ip_match:
             ip_name = ip_match.group(1)
             addr = ip_match.group(2)
             player_ips[ip_name] = re.sub(r':\d+$', '', addr)  # strip port
 
-        join_match = re.search(r"\[Server thread/INFO\]: (\w+) joined the game", line)
+        join_match = re.search(_LI + r"(\w+) joined the game", line)
         if join_match:
             name = join_match.group(1)
             players.add(name)
@@ -1857,7 +1863,7 @@ def emit_server_output(process):
             _fire_player_webhook_async('join', name)
             _check_first_join_async(name)
 
-        leave_match = re.search(r"\[Server thread/INFO\]: (\w+) left the game", line)
+        leave_match = re.search(_LI + r"(\w+) left the game", line)
         if leave_match:
             name = leave_match.group(1)
             players.discard(name)
@@ -1871,20 +1877,20 @@ def emit_server_output(process):
                 playtime_str = (f'{h}h {m}m {s}s' if h else f'{m}m {s}s') if secs >= 60 else f'{secs}s'
             _fire_player_webhook_async('leave', name, playtime_str)
 
-        adv_match = re.search(r"\[Server thread/INFO\]: (\w+) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]", line)
+        adv_match = re.search(_LI + r"(\w+) has (?:made the advancement|completed the challenge|reached the goal) \[(.+?)\]", line)
         if adv_match:
             _fire_player_webhook_async('achievement', adv_match.group(1), adv_match.group(2))
 
         death_match = re.search(
-            r"\[Server thread/INFO\]: (\w+) "
+            _LI + r"(\w+) "
             r"(?:was |fell |drowned|burned|suffocated|starved|hit the ground|died|blew up|withered|walked into|tried to swim|froze|experienced kinetic|was squished|was pummeled|was shot|was skewered|was fireballed|was killed|was impaled|was struck)",
             line)
         if death_match:
             name = death_match.group(1)
-            raw_msg = re.sub(r'^\[\d+:\d+:\d+\] \[Server thread/INFO\]: ', '', line).strip()
+            raw_msg = re.sub(_LI, '', line).strip()
             _fire_player_webhook_async('death', name, raw_msg)
 
-        chat_match = re.search(r"\[Server thread/INFO\]: <(\w+)> (.+)", line)
+        chat_match = re.search(_LI + r"<(\w+)> (.+)", line)
         if chat_match:
             _fire_chat_webhook_async(chat_match.group(1), chat_match.group(2).strip())
 
@@ -1920,19 +1926,23 @@ def send_command():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-def send_server_command(command):
-    global server_process, console_output
+def _send_command(command):
+    """Send a command to the server stdin. Returns True if sent, False otherwise."""
+    global server_process
     try:
         if server_process and server_process.stdin and not server_process.poll():
             server_process.stdin.write(f'{command}\n')
             server_process.stdin.flush()
             _append_console(f"[{time.strftime('%H:%M:%S')}] [Panel Command]: {command.strip()}")
-            return jsonify({"status": "Command sent", "command": command.strip()})
-        else:
-            return jsonify({"error": "Server not running or input stream closed"}), 400
-    except Exception as e:
-        _append_console(f"Error: {e}")
-        return jsonify({"error": str(e)}), 500
+            return True
+    except Exception:
+        pass
+    return False
+
+def send_server_command(command):
+    if _send_command(command):
+        return jsonify({"status": "Command sent", "command": command.strip()})
+    return jsonify({"error": "Server not running or input stream closed"}), 400
 
 @app.route('/ban', methods=['POST'])
 def ban_player():
@@ -1974,107 +1984,17 @@ def set_gamemode():
         return jsonify({'error': 'invalid mode'}), 400
     return send_server_command(f'gamemode {mode} {player}')
 
-def _get_player_uuid(name):
-    usercache = os.path.join(server_files_dir, 'usercache.json')
-    try:
-        with open(usercache) as f:
-            cache = json.load(f)
-        for entry in cache:
-            if entry.get('name', '').lower() == name.lower():
-                return entry.get('uuid', '')
-    except Exception:
-        pass
-    return None
 
-def _skip_nbt_value(data, pos, tag_type):
-    if tag_type == 1:  return pos + 1
-    if tag_type == 2:  return pos + 2
-    if tag_type == 3:  return pos + 4
-    if tag_type == 4:  return pos + 8
-    if tag_type == 5:  return pos + 4
-    if tag_type == 6:  return pos + 8
-    if tag_type == 7:
-        l = struct.unpack('>i', data[pos:pos+4])[0]; return pos + 4 + max(0, l)
-    if tag_type == 8:
-        l = struct.unpack('>H', data[pos:pos+2])[0]; return pos + 2 + l
-    if tag_type == 9:
-        et = data[pos]; ec = struct.unpack('>i', data[pos+1:pos+5])[0]; pos += 5
-        for _ in range(max(0, ec)): pos = _skip_nbt_value(data, pos, et)
-        return pos
-    if tag_type == 10:
-        while pos < len(data):
-            t = data[pos]; pos += 1
-            if t == 0: break
-            nl = struct.unpack('>H', data[pos:pos+2])[0]; pos += 2 + nl
-            pos = _skip_nbt_value(data, pos, t)
-        return pos
-    if tag_type == 11:
-        l = struct.unpack('>i', data[pos:pos+4])[0]; return pos + 4 + max(0, l) * 4
-    if tag_type == 12:
-        l = struct.unpack('>i', data[pos:pos+4])[0]; return pos + 4 + max(0, l) * 8
-    return pos
-
-def _parse_player_inventory(uuid_with_dashes):
-    """Parse Inventory list from player .dat file. Tries Spigot and vanilla paths."""
-    paths = [
-        os.path.join(server_files_dir, 'world', 'players', 'data', f'{uuid_with_dashes}.dat'),
-        os.path.join(server_files_dir, 'world', 'playerdata', f'{uuid_with_dashes}.dat'),
-    ]
-    data = None
-    for p in paths:
-        try:
-            with gzip.open(p, 'rb') as f: data = f.read()
-            break
-        except Exception: continue
-    if data is None:
-        return None
-
-    search = bytes([9, 0, 9]) + b'Inventory'
-    idx = data.find(search)
-    if idx == -1:
-        return []
-
-    pos = idx + 3 + 9
-    elem_type = data[pos]
-    count = struct.unpack('>i', data[pos+1:pos+5])[0]
-    pos += 5
-
-    if elem_type != 10 or count <= 0 or count > 200:
-        return []
-
-    items = []
-    for _ in range(count):
-        item = {}
-        while pos < len(data):
-            t = data[pos]; pos += 1
-            if t == 0: break
-            nl = struct.unpack('>H', data[pos:pos+2])[0]; pos += 2
-            name = data[pos:pos+nl].decode('utf-8', errors='replace'); pos += nl
-            if t == 1:
-                item[name] = struct.unpack('>b', data[pos:pos+1])[0]; pos += 1
-            elif t == 8:
-                sl = struct.unpack('>H', data[pos:pos+2])[0]; pos += 2
-                item[name] = data[pos:pos+sl].decode('utf-8', errors='replace'); pos += sl
-            else:
-                pos = _skip_nbt_value(data, pos, t)
-        if 'id' in item and 'Slot' in item:
-            items.append({'id': item['id'], 'count': int(item.get('Count', 1)), 'slot': int(item['Slot'])})
-    return items
-
-@app.route('/player-inventory', methods=['POST'])
-def player_inventory():
-    name = request.json['player']
-    uid = _get_player_uuid(name)
-    if not uid:
-        return jsonify({'error': f'UUID not found for {name}'}), 404
-    items = _parse_player_inventory(uid)
-    if items is None:
-        return jsonify({'error': 'Player data file not found'}), 404
-    return jsonify({'items': items})
+def _get_world_dir():
+    """Return the world folder path, respecting the level-name in server.properties."""
+    props_path = os.path.join(server_files_dir, 'server.properties')
+    props = read_properties(props_path)
+    level_name = props.get('level-name', 'world').strip() or 'world'
+    return os.path.join(server_files_dir, level_name)
 
 def _read_spawn_coords():
     """Read SpawnX/Y/Z from level.dat. Falls back to 0/64/0."""
-    level_dat = os.path.join(server_files_dir, 'world', 'level.dat')
+    level_dat = os.path.join(_get_world_dir(), 'level.dat')
     try:
         with gzip.open(level_dat, 'rb') as f:
             data = f.read()
@@ -2110,6 +2030,15 @@ def whitelist_action():
 @app.route('/get-players')
 def get_players():
     return jsonify([{'name': n, 'ip': player_ips.get(n)} for n in players])
+
+@app.route('/ops')
+def get_ops():
+    ops_path = os.path.join(server_files_dir, 'ops.json')
+    try:
+        with open(ops_path) as f:
+            return jsonify(json.load(f))
+    except Exception:
+        return jsonify([])
 
 @app.route('/get-console-output')
 def get_console_output():

@@ -678,7 +678,10 @@ function render() {
   groups.general.appendChild(kitSwitch('online-mode','Online Mode',valTrue(current['online-mode'])));
   groups.general.appendChild(kitSwitch('hardcore','Hardcore',valTrue(current['hardcore'])));
   groups.general.appendChild(kitSwitch('enforce-whitelist','Enforce Whitelist',valTrue(current['enforce-whitelist'])));
+  groups.general.appendChild(kitSwitch('white-list','Whitelist',valTrue(current['white-list'])));
   groups.general.appendChild(kitSwitch('pvp','PVP',valTrue(current['pvp'])));
+  groups.general.appendChild(kitSwitch('enforce-secure-profile','Enforce Secure Profile',valTrue(current['enforce-secure-profile'])));
+  groups.general.appendChild(kitInput('bug-report-link','Bug Report Link',current['bug-report-link']||'',''));
 
   groups.network.appendChild(kitInput('server-ip','Server IP',current['server-ip']||'','',true));
   groups.network.appendChild(kitInput('server-port','Server Port',current['server-port']||'25565','25565',true,true));
@@ -688,6 +691,9 @@ function render() {
   groups.network.appendChild(kitSwitch('hide-online-players','Hide Online Players',valTrue(current['hide-online-players'])));
   groups.network.appendChild(kitSwitch('log-ips','Log IPs',valTrue(current['log-ips'])));
   groups.network.appendChild(kitSwitch('use-native-transport','Use Native Transport',valTrue(current['use-native-transport'])));
+  groups.network.appendChild(kitSwitch('enable-status','Enable Status',valTrue(current['enable-status'])));
+  groups.network.appendChild(kitSwitch('prevent-proxy-connections','Prevent Proxy Connections',valTrue(current['prevent-proxy-connections'])));
+  groups.network.appendChild(kitInput('network-compression-threshold','Network Compression Threshold',current['network-compression-threshold']||'256','256',false,true));
 
   groups.gameplay.appendChild(kitSwitch('allow-flight','Allow Flight',valTrue(current['allow-flight'])));
   groups.gameplay.appendChild(kitSwitch('spawn-monsters','Spawn Monsters',valTrue(current['spawn-monsters'])));
@@ -697,6 +703,10 @@ function render() {
   groups.gameplay.appendChild(kitSwitch('force-gamemode','Force Gamemode',valTrue(current['force-gamemode'])));
   groups.gameplay.appendChild(kitInput('function-permission-level','Function Permission Level',current['function-permission-level']||'2','2',false,true));
   groups.gameplay.appendChild(kitInput('op-permission-level','OP Permission Level',current['op-permission-level']||'4','4',false,true));
+  groups.gameplay.appendChild(kitSwitch('enable-command-block','Enable Command Block',valTrue(current['enable-command-block'])));
+  groups.gameplay.appendChild(kitSwitch('sync-chunk-writes','Sync Chunk Writes',valTrue(current['sync-chunk-writes'])));
+  groups.gameplay.appendChild(kitSwitch('accepts-transfers','Accept Transfers',valTrue(current['accepts-transfers'])));
+  groups.gameplay.appendChild(kitInput('max-chained-neighbor-updates','Max Chained Neighbor Updates',current['max-chained-neighbor-updates']||'1000000','1000000',false,true));
 
   groups.world.appendChild(kitInput('level-name','Level Name',current['level-name']||'world','world'));
   groups.world.appendChild(kitInput('level-seed','Level Seed',current['level-seed']||'',''));
@@ -705,26 +715,36 @@ function render() {
   groups.world.appendChild(kitInput('max-world-size','Max World Size',current['max-world-size']||'29999984','29999984',false,true));
   groups.world.appendChild(kitInput('max-tick-time','Max Tick Time',current['max-tick-time']||'60000','60000',false,true));
   groups.world.appendChild(kitInput('entity-broadcast-range-percentage','Entity Broadcast %',current['entity-broadcast-range-percentage']||'100','100',false,true));
+  groups.world.appendChild(kitSwitch('allow-nether','Allow Nether',valTrue(current['allow-nether'])));
+  groups.world.appendChild(kitSelect('region-file-compression','Region File Compression',schema.options?.['region-file-compression'],current['region-file-compression']));
+  groups.world.appendChild(kitInput('generator-settings','Generator Settings',current['generator-settings']||'','{}',true));
+  groups.world.appendChild(kitInput('initial-enabled-packs','Initial Enabled Packs',current['initial-enabled-packs']||'vanilla',''));
+  groups.world.appendChild(kitInput('initial-disabled-packs','Initial Disabled Packs',current['initial-disabled-packs']||'',''));
 
   groups.rp.appendChild(kitSwitch('require-resource-pack','Require Resource Pack',valTrue(current['require-resource-pack'])));
   groups.rp.appendChild(kitInput('resource-pack','Resource Pack URL',current['resource-pack']||'',''));
   groups.rp.appendChild(kitInput('resource-pack-prompt','RP Prompt',current['resource-pack-prompt']||'',''));
   groups.rp.appendChild(kitInput('resource-pack-sha1','RP SHA1',current['resource-pack-sha1']||'','',true));
+  groups.rp.appendChild(kitInput('resource-pack-id','Resource Pack ID',current['resource-pack-id']||'','',true));
 
   groups.remote.appendChild(kitSwitch('enable-rcon','Enable RCON',valTrue(current['enable-rcon'])));
   groups.remote.appendChild(kitInput('rcon.port','RCON Port',current['rcon.port']||'25575','25575',true,true));
   groups.remote.appendChild(kitInput('rcon.password','RCON Password',current['rcon.password']||'',''));
   groups.remote.appendChild(kitSwitch('enable-query','Enable Query',valTrue(current['enable-query'])));
   groups.remote.appendChild(kitInput('query.port','Query Port',current['query.port']||'25565','25565',true,true));
+  groups.remote.appendChild(kitSwitch('broadcast-console-to-ops','Broadcast Console to Ops',valTrue(current['broadcast-console-to-ops'])));
+  groups.remote.appendChild(kitSwitch('broadcast-rcon-to-ops','Broadcast RCON to Ops',valTrue(current['broadcast-rcon-to-ops'])));
+  groups.remote.appendChild(kitSwitch('enable-jmx-monitoring','Enable JMX Monitoring',valTrue(current['enable-jmx-monitoring'])));
+  groups.remote.appendChild(kitInput('text-filtering-config','Text Filtering Config',current['text-filtering-config']||'',''));
 }
 
 function collect() {
   const get = id => document.getElementById(id);
   const data = {};
-  ['motd','difficulty','gamemode','server-ip','server-port','view-distance','simulation-distance','rate-limit','player-idle-timeout','max-players','spawn-protection','function-permission-level','op-permission-level','level-name','level-seed','level-type','max-world-size','max-tick-time','entity-broadcast-range-percentage','resource-pack','resource-pack-prompt','resource-pack-sha1','rcon.port','rcon.password','query.port'].forEach(k => {
+  ['motd','difficulty','gamemode','server-ip','server-port','view-distance','simulation-distance','rate-limit','player-idle-timeout','max-players','spawn-protection','function-permission-level','op-permission-level','level-name','level-seed','level-type','max-world-size','max-tick-time','entity-broadcast-range-percentage','resource-pack','resource-pack-prompt','resource-pack-sha1','resource-pack-id','rcon.port','rcon.password','query.port','bug-report-link','network-compression-threshold','max-chained-neighbor-updates','region-file-compression','generator-settings','initial-enabled-packs','initial-disabled-packs','text-filtering-config'].forEach(k => {
     const e = get(k); if(!e) return; data[k] = e.value;
   });
-  ['online-mode','hardcore','enforce-whitelist','pvp','hide-online-players','log-ips','use-native-transport','allow-flight','spawn-monsters','force-gamemode','generate-structures','require-resource-pack','enable-rcon','enable-query'].forEach(k => {
+  ['online-mode','hardcore','enforce-whitelist','white-list','pvp','enforce-secure-profile','hide-online-players','log-ips','use-native-transport','enable-status','prevent-proxy-connections','allow-flight','spawn-monsters','force-gamemode','generate-structures','require-resource-pack','enable-rcon','enable-query','enable-command-block','sync-chunk-writes','accepts-transfers','allow-nether','broadcast-console-to-ops','broadcast-rcon-to-ops','enable-jmx-monitoring'].forEach(k => {
     const e = get(k); if(!e) return; data[k] = e.checked;
   });
   return data;

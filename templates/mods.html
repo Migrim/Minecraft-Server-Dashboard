@@ -188,7 +188,7 @@
             <th style="width:15%; text-align:right">Actions</th>
           </tr>
         </thead>
-        <tbody id="modsBody"></tbody>
+        <tbody id="modsBody"><tr class="empty-row"><td colspan="5">Loading mods…</td></tr></tbody>
       </table>
     </div>
     <div class="table-foot">
@@ -383,6 +383,7 @@ function escHtml(s) {
 
 /* ---------- load ---------- */
 async function loadList() {
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Loading mods…</td></tr>`;
   const r = await fetch(`/${KIND}/list`);
   const j = await r.json();
   allMods = (j && j.items) || [];

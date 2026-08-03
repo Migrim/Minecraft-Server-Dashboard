@@ -461,6 +461,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('notif-list').addEventListener('scroll', _ctxHide);
 });
 
+/* ── background panel-update check ── */
+(function() {
+  const POLL_MS = 5 * 60 * 1000; // re-check the server's cached result every 5 min
+  const SEEN_KEY = 'mc-update-seen-sha';
+  function poll() {
+    fetch('/update-check-background').then(r => r.json()).then(info => {
+      if (!info || !info.ok || !info.update_available || !info.latest_sha) return;
+      if (localStorage.getItem(SEEN_KEY) === info.latest_sha) return;
+      localStorage.setItem(SEEN_KEY, info.latest_sha);
+      const msg = info.latest_message
+        ? (info.latest_short + ' · ' + info.latest_message)
+        : ('Version ' + info.latest_short + ' is available.');
+      _nAdd('Panel update available', msg, 'ok');
+    }).catch(() => {});
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    poll();
+    setInterval(poll, POLL_MS);
+  });
+})();
+
 /* ── nav sliding pill ── */
 (function() {
   const nav    = document.getElementById('main-nav');

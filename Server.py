@@ -2111,6 +2111,21 @@ UPDATE_PIP_PACKAGES = ['flask', 'flask-socketio', 'requests', 'flask-cors', 'gun
 update_job_lock = threading.Lock()
 APP_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+UPDATE_CHECK_INTERVAL_SEC = 3600  # background GitHub poll interval
+_bg_update_lock = threading.Lock()
+_bg_update_state = {
+    'ok': False,
+    'checked_at': None,
+    'update_available': False,
+    'current_sha': None,
+    'current_short': None,
+    'latest_sha': None,
+    'latest_short': None,
+    'latest_message': '',
+    'latest_date': '',
+    'error': None,
+}
+
 def _read_update_state():
     if os.path.exists(UPDATE_STATE_PATH):
         try:
@@ -2177,18 +2192,15 @@ def _finish_update_if_pending():
 
 _finish_update_if_pending()
 
-@app.route('/update-check')
-def update_check():
+def _run_update_check():
+    """Hit GitHub for the latest commit and return (status_dict, http_status). Raises on network/git errors."""
     if not os.path.isdir(os.path.join(APP_ROOT_DIR, '.git')):
-        return jsonify({'ok': False, 'error': 'This panel was not installed via git; automatic updates are unavailable.'}), 400
+        return {'ok': False, 'error': 'This panel was not installed via git; automatic updates are unavailable.'}, 400
     current = _current_commit()
-    try:
-        remote_sha, message, date = _fetch_remote_info()
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+    remote_sha, message, date = _fetch_remote_info()
     if not remote_sha:
-        return jsonify({'ok': False, 'error': 'Could not reach GitHub to check for updates.'}), 502
-    return jsonify({
+        return {'ok': False, 'error': 'Could not reach GitHub to check for updates.'}, 502
+    return {
         'ok': True,
         'current_sha': current,
         'current_short': (current or '')[:7],
@@ -2198,7 +2210,38 @@ def update_check():
         'latest_date': date,
         'update_available': bool(current) and current != remote_sha,
         'repo_url': GITHUB_REPO_URL,
-    })
+    }, 200
+
+@app.route('/update-check')
+def update_check():
+    try:
+        result, status = _run_update_check()
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    return jsonify(result), status
+
+def _bg_update_check_once():
+    with app.app_context():
+        try:
+            result, _status = _run_update_check()
+        except Exception as e:
+            result = {'ok': False, 'error': str(e)}
+        result['checked_at'] = time.time()
+    with _bg_update_lock:
+        _bg_update_state.update(result)
+
+def update_check_loop():
+    while True:
+        try:
+            _bg_update_check_once()
+        except Exception:
+            pass
+        time.sleep(UPDATE_CHECK_INTERVAL_SEC)
+
+@app.route('/update-check-background')
+def update_check_background():
+    with _bg_update_lock:
+        return jsonify(dict(_bg_update_state))
 
 @app.route('/update-status')
 def update_status():
@@ -3145,6 +3188,7 @@ if __name__ == '__main__':
         s = get_panel_settings()
         threading.Thread(target=watchdog_loop, daemon=True).start()
         threading.Thread(target=schedule_loop, daemon=True).start()
+        threading.Thread(target=update_check_loop, daemon=True).start()
         if s.get('auto_start_on_boot', False) and os.path.isfile(jar_path) and not is_process_alive():
             start_server()
     socketio.run(app, host="127.0.0.1", port=5003, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)

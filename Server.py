@@ -20,6 +20,7 @@ import shutil
 import zipfile, tempfile
 import struct
 import gzip
+import sys
 
 from io import BytesIO
 try:
@@ -2101,6 +2102,149 @@ def save_server_status(status):
 def read_server_status():
     return _read_state().get('server_running', False)
 
+
+# ---- panel self-update (via GitHub) ----
+GITHUB_REPO_URL = 'https://github.com/Migrim/Minecraft-Server-Dashboard'
+UPDATE_BRANCH = 'main'
+UPDATE_STATE_PATH = os.path.join(app.instance_path, 'update_status.json')
+UPDATE_PIP_PACKAGES = ['flask', 'flask-socketio', 'requests', 'flask-cors', 'gunicorn', 'pillow']
+update_job_lock = threading.Lock()
+APP_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _read_update_state():
+    if os.path.exists(UPDATE_STATE_PATH):
+        try:
+            with open(UPDATE_STATE_PATH, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _write_update_state(**updates):
+    os.makedirs(app.instance_path, exist_ok=True)
+    cur = _read_update_state()
+    cur.update({k: v for k, v in updates.items() if v is not None})
+    cur['updated_at'] = time.time()
+    with open(UPDATE_STATE_PATH, 'w') as f:
+        json.dump(cur, f)
+    try:
+        socketio.emit('update_progress', cur)
+    except Exception:
+        pass
+    return cur
+
+def _git(args, timeout=30):
+    return subprocess.run(['git'] + args, cwd=APP_ROOT_DIR, capture_output=True, text=True, timeout=timeout)
+
+def _current_commit():
+    r = _git(['rev-parse', 'HEAD'])
+    return (r.stdout or '').strip() if r.returncode == 0 else None
+
+def _fetch_remote_info(branch=UPDATE_BRANCH):
+    _git(['fetch', 'origin', branch, '--quiet'], timeout=30)
+    r = _git(['rev-parse', 'origin/' + branch])
+    remote_sha = (r.stdout or '').strip() if r.returncode == 0 else None
+    message, date = '', ''
+    if remote_sha:
+        r2 = _git(['log', '-1', '--format=%s|%ci', remote_sha])
+        if r2.returncode == 0 and r2.stdout.strip():
+            parts = r2.stdout.strip().split('|', 1)
+            message = parts[0]
+            date = parts[1] if len(parts) > 1 else ''
+    return remote_sha, message, date
+
+def _restart_panel_process():
+    time.sleep(0.6)  # let the HTTP response for /update-install flush first
+    try:
+        r = subprocess.run(['systemctl', 'restart', 'mc-panel.service'], capture_output=True, text=True, timeout=15)
+        if r.returncode == 0:
+            return
+    except Exception:
+        pass
+    try:
+        os.execv(sys.executable, [sys.executable, os.path.join(APP_ROOT_DIR, 'Server.py')])
+    except Exception as e:
+        _write_update_state(step='error', error='Restart failed: %s' % e)
+
+def _finish_update_if_pending():
+    st = _read_update_state()
+    if st.get('step') == 'restarting':
+        current = _current_commit()
+        if current:
+            _write_update_state(step='done', current_sha=current)
+        else:
+            _write_update_state(step='error', error='Restarted, but could not verify the installed version.')
+
+_finish_update_if_pending()
+
+@app.route('/update-check')
+def update_check():
+    if not os.path.isdir(os.path.join(APP_ROOT_DIR, '.git')):
+        return jsonify({'ok': False, 'error': 'This panel was not installed via git; automatic updates are unavailable.'}), 400
+    current = _current_commit()
+    try:
+        remote_sha, message, date = _fetch_remote_info()
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    if not remote_sha:
+        return jsonify({'ok': False, 'error': 'Could not reach GitHub to check for updates.'}), 502
+    return jsonify({
+        'ok': True,
+        'current_sha': current,
+        'current_short': (current or '')[:7],
+        'latest_sha': remote_sha,
+        'latest_short': remote_sha[:7],
+        'latest_message': message,
+        'latest_date': date,
+        'update_available': bool(current) and current != remote_sha,
+        'repo_url': GITHUB_REPO_URL,
+    })
+
+@app.route('/update-status')
+def update_status():
+    return jsonify({'ok': True, **_read_update_state()})
+
+@app.route('/update-install', methods=['POST'])
+def update_install():
+    if not os.path.isdir(os.path.join(APP_ROOT_DIR, '.git')):
+        return jsonify({'ok': False, 'error': 'This panel was not installed via git; automatic updates are unavailable.'}), 400
+    if not update_job_lock.acquire(blocking=False):
+        return jsonify({'ok': False, 'error': 'An update is already running.'}), 409
+
+    def run():
+        release_lock = True
+        try:
+            _write_update_state(step='checking', error=None, from_sha=None, to_sha=None)
+            current = _current_commit()
+            remote_sha, message, date = _fetch_remote_info()
+            if not remote_sha:
+                raise RuntimeError('Could not reach GitHub to check for updates.')
+            if current == remote_sha:
+                _write_update_state(step='done', current_sha=current)
+                return
+            _write_update_state(step='pulling', from_sha=current, to_sha=remote_sha, latest_message=message)
+            r = _git(['reset', '--hard', 'origin/' + UPDATE_BRANCH], timeout=60)
+            if r.returncode != 0:
+                raise RuntimeError((r.stderr or '').strip() or 'git reset failed')
+            _git(['clean', '-fd', '--exclude=instance', '--exclude=uploads', '--exclude=server-files', '--exclude=venv'], timeout=60)
+            _write_update_state(step='installing_deps')
+            pip = subprocess.run(
+                [sys.executable, '-m', 'pip', 'install', '-q'] + UPDATE_PIP_PACKAGES,
+                capture_output=True, text=True, timeout=180
+            )
+            if pip.returncode != 0:
+                raise RuntimeError(((pip.stderr or '').strip() or 'pip install failed')[-500:])
+            _write_update_state(step='restarting', to_sha=remote_sha)
+            release_lock = False
+            threading.Thread(target=_restart_panel_process, daemon=True).start()
+        except Exception as e:
+            _write_update_state(step='error', error=str(e))
+        finally:
+            if release_lock:
+                update_job_lock.release()
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'ok': True})
 
 
 # ---- BEGIN mods/plugins management endpoints ----

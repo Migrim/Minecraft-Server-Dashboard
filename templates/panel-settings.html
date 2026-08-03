@@ -334,8 +334,29 @@
   .step .dot-mini.ok  { background:var(--ok); }
   .step .dot-mini.err { background:var(--danger); }
 
-  /* ---- reinstall / restore overlays ---- */
-  #reinstall-overlay, #restore-overlay {
+  /* ---------- update drawer ---------- */
+  .upd-badge {
+    position:absolute; top:-3px; right:-3px; width:9px; height:9px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 0 2px var(--surface);
+  }
+  .update-drawer-body { padding:22px; overflow-y:auto; flex:1 1 auto; display:flex; flex-direction:column; gap:18px; }
+  .update-status-row { display:flex; align-items:center; gap:14px; }
+  .update-status-ico {
+    width:40px; height:40px; border-radius:10px; flex:0 0 40px;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text-3);
+    display:flex; align-items:center; justify-content:center; transition:background .2s,border-color .2s,color .2s;
+  }
+  .update-status-ico svg { width:18px; height:18px; }
+  .update-status-ico.ok      { background:var(--ok-soft);   border-color:color-mix(in oklab,var(--ok) 30%,transparent);   color:var(--ok); }
+  .update-status-ico.avail   { background:var(--accent-soft); border-color:color-mix(in oklab,var(--accent) 30%,transparent); color:var(--accent); }
+  .update-status-ico.err     { background:var(--danger-soft); border-color:color-mix(in oklab,var(--danger) 30%,transparent); color:var(--danger); }
+  .update-status-ico .spin-sm { display:inline-block; }
+  .update-status-title { font-size:14.5px; font-weight:600; color:var(--text); }
+  .update-status-sub { font-size:12.5px; color:var(--text-3); margin-top:2px; }
+  .update-drawer-body .info-table { margin:0; }
+
+  /* ---- reinstall / restore / update overlays ---- */
+  #reinstall-overlay, #restore-overlay, #update-overlay {
     position:fixed; inset:0; z-index:10000;
     background: color-mix(in oklab, var(--bg) 82%, transparent);
     backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
@@ -505,6 +526,11 @@
         <button id="btn-backups-open" class="btn btn-secondary">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
           Backups
+        </button>
+        <button id="btn-update-open" class="btn btn-secondary" style="position:relative">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Updates
+          <span id="update-badge" class="upd-badge" style="display:none"></span>
         </button>
         <button id="btn-reinstall" class="btn btn-danger">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
@@ -915,6 +941,85 @@
       <div id="restore-error-msg" class="error-text">Restore failed.</div>
     </div>
     <div class="ft"><button id="restore-error-close" class="btn btn-primary">OK</button></div>
+  </div>
+</div>
+
+<!-- ===== UPDATES DRAWER ===== -->
+<section id="update-drawer" class="backup-drawer" aria-hidden="true">
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="update-drawer-title">
+    <div class="drawer-grip" aria-hidden="true"></div>
+    <div class="drawer-head">
+      <div class="drawer-title">
+        <h2 id="update-drawer-title">Updates</h2>
+        <span>Check GitHub for the latest version of this panel</span>
+      </div>
+      <div class="drawer-actions">
+        <button id="btn-update-check" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Check Again
+        </button>
+        <button id="btn-update-close" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          Close
+        </button>
+      </div>
+    </div>
+    <div class="update-drawer-body">
+      <div class="update-status-row">
+        <div class="update-status-ico" id="update-status-ico">
+          <span class="spin-sm" style="border-color:var(--text-3);border-right-color:transparent"></span>
+        </div>
+        <div>
+          <div class="update-status-title" id="update-status-title">Checking for updates…</div>
+          <div class="update-status-sub" id="update-status-sub">—</div>
+        </div>
+      </div>
+      <div class="info-table" id="update-detail" style="display:none">
+        <div class="info-k">Current version</div><div class="info-v" id="update-current-sha">—</div>
+        <div class="info-k">Latest version</div><div class="info-v" id="update-latest-sha">—</div>
+        <div class="info-k">Latest commit</div><div class="info-v muted" id="update-latest-msg">—</div>
+      </div>
+      <button id="btn-update-install" class="btn btn-primary" style="align-self:flex-start" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install Update
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- update install progress overlay -->
+<div id="update-overlay">
+  <div class="ri-card">
+    <div class="ri-icon-wrap" id="upd-icon">
+      <svg id="upd-icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <svg id="upd-icon-check" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h2 class="ri-title" id="upd-title">Updating Panel…</h2>
+    <div class="ri-steps">
+      <div class="ri-step" data-step="checking">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Checking GitHub for updates</span>
+      </div>
+      <div class="ri-step" data-step="pulling">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Downloading update</span>
+      </div>
+      <div class="ri-step" data-step="installing_deps">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Installing dependencies</span>
+      </div>
+      <div class="ri-step" data-step="restarting">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Restarting panel</span>
+      </div>
+      <div class="ri-step" data-step="done">
+        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
+        <span>Back online</span>
+      </div>
+    </div>
+    <div class="ri-msg" id="upd-msg">This may take a moment…</div>
+    <button id="update-refresh-now" class="btn btn-primary" style="display:none">Refresh Now</button>
+    <button id="update-close" class="btn btn-secondary" style="display:none">Close</button>
   </div>
 </div>
 
@@ -1718,9 +1823,10 @@ function withLoading(btn,text,fn){
 const backupDrawer=document.getElementById('backup-drawer');
 const customizeDrawer=document.getElementById('customize-drawer');
 const discordDrawer=document.getElementById('discord-drawer');
+const updateDrawer=document.getElementById('update-drawer');
 const backupBackdrop=document.getElementById('backup-backdrop');
 function openBackupDrawer(){
-  closeCustomizeDrawer(false); closeDiscordDrawer(false);
+  closeCustomizeDrawer(false); closeDiscordDrawer(false); closeUpdateDrawer(false);
   backupDrawer.classList.add('open');
   backupBackdrop.classList.add('show');
   backupDrawer.setAttribute('aria-hidden','false');
@@ -1732,7 +1838,7 @@ function closeBackupDrawer(hideBackdrop=true){
   backupDrawer.setAttribute('aria-hidden','true');
 }
 function openCustomizeDrawer(){
-  closeBackupDrawer(false); closeDiscordDrawer(false);
+  closeBackupDrawer(false); closeDiscordDrawer(false); closeUpdateDrawer(false);
   customizeDrawer.classList.add('open');
   backupBackdrop.classList.add('show');
   customizeDrawer.setAttribute('aria-hidden','false');
@@ -1744,7 +1850,7 @@ function closeCustomizeDrawer(hideBackdrop=true){
   customizeDrawer.setAttribute('aria-hidden','true');
 }
 function openDiscordDrawer(){
-  closeBackupDrawer(false); closeCustomizeDrawer(false);
+  closeBackupDrawer(false); closeCustomizeDrawer(false); closeUpdateDrawer(false);
   discordDrawer.classList.add('open');
   backupBackdrop.classList.add('show');
   discordDrawer.setAttribute('aria-hidden','false');
@@ -1754,10 +1860,23 @@ function closeDiscordDrawer(hideBackdrop=true){
   if(hideBackdrop) backupBackdrop.classList.remove('show');
   discordDrawer.setAttribute('aria-hidden','true');
 }
+function openUpdateDrawer(){
+  closeBackupDrawer(false); closeCustomizeDrawer(false); closeDiscordDrawer(false);
+  updateDrawer.classList.add('open');
+  backupBackdrop.classList.add('show');
+  updateDrawer.setAttribute('aria-hidden','false');
+  checkForUpdates();
+}
+function closeUpdateDrawer(hideBackdrop=true){
+  updateDrawer.classList.remove('open');
+  if(hideBackdrop) backupBackdrop.classList.remove('show');
+  updateDrawer.setAttribute('aria-hidden','true');
+}
 function closeDrawers(){
   closeBackupDrawer(false);
   closeCustomizeDrawer(false);
   closeDiscordDrawer(false);
+  closeUpdateDrawer(false);
   backupBackdrop.classList.remove('show');
 }
 function updateDiscordSummary(){
@@ -1794,8 +1913,10 @@ document.getElementById('btn-backup-close').addEventListener('click',closeBackup
 document.getElementById('btn-discord-open').addEventListener('click',openDiscordDrawer);
 document.getElementById('btn-discord-close').addEventListener('click',closeDiscordDrawer);
 document.getElementById('btn-discord-save').addEventListener('click',()=>{ saveSettings(); closeDiscordDrawer(); });
+document.getElementById('btn-update-open').addEventListener('click',openUpdateDrawer);
+document.getElementById('btn-update-close').addEventListener('click',closeUpdateDrawer);
 backupBackdrop.addEventListener('click',closeDrawers);
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&(backupDrawer.classList.contains('open')||customizeDrawer.classList.contains('open')||discordDrawer.classList.contains('open'))) closeDrawers(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&(backupDrawer.classList.contains('open')||customizeDrawer.classList.contains('open')||discordDrawer.classList.contains('open')||updateDrawer.classList.contains('open'))) closeDrawers(); });
 document.getElementById('btn-backup-refresh').addEventListener('click',loadBackups);
 document.getElementById('btn-backup-create').addEventListener('click',()=>{
   const btn=document.getElementById('btn-backup-create');
@@ -1865,6 +1986,156 @@ document.getElementById('reinstall-confirm').addEventListener('click',()=>{
   runAnimation();
 });
 
-document.addEventListener('DOMContentLoaded',()=>{ attachSteppers(); loadSettings(); refreshStatus(); refreshPlayers(); loadBackups(); setInterval(()=>{ refreshStatus(); refreshPlayers(); },4000); });
+/* ---- updates ---- */
+const UPD_ICON_OK    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+const UPD_ICON_AVAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+const UPD_ICON_ERR   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+const UPD_ICON_SPIN  = '<span class="spin-sm" style="border-color:var(--text-3);border-right-color:transparent"></span>';
+
+function renderUpdateStatus(info){
+  const ico=document.getElementById('update-status-ico');
+  const title=document.getElementById('update-status-title');
+  const sub=document.getElementById('update-status-sub');
+  const detail=document.getElementById('update-detail');
+  const installBtn=document.getElementById('btn-update-install');
+  const badge=document.getElementById('update-badge');
+  if(!info||!info.ok){
+    ico.className='update-status-ico err'; ico.innerHTML=UPD_ICON_ERR;
+    title.textContent='Could not check for updates';
+    sub.textContent=(info&&info.error)||'Check your network connection.';
+    detail.style.display='none';
+    installBtn.disabled=true;
+    if(badge) badge.style.display='none';
+    return;
+  }
+  detail.style.display='';
+  document.getElementById('update-current-sha').textContent=info.current_short||'—';
+  document.getElementById('update-latest-sha').textContent=info.latest_short||'—';
+  document.getElementById('update-latest-msg').textContent=info.latest_message?(info.latest_message+(info.latest_date?' · '+info.latest_date.slice(0,10):'')):'—';
+  if(info.update_available){
+    ico.className='update-status-ico avail'; ico.innerHTML=UPD_ICON_AVAIL;
+    title.textContent='Update available';
+    sub.textContent='A new version is available on GitHub.';
+    installBtn.disabled=false;
+    if(badge) badge.style.display='';
+  } else {
+    ico.className='update-status-ico ok'; ico.innerHTML=UPD_ICON_OK;
+    title.textContent='Up to date';
+    sub.textContent='You are running the latest version.';
+    installBtn.disabled=true;
+    if(badge) badge.style.display='none';
+  }
+}
+function checkForUpdates(){
+  const ico=document.getElementById('update-status-ico');
+  ico.className='update-status-ico'; ico.innerHTML=UPD_ICON_SPIN;
+  document.getElementById('update-status-title').textContent='Checking for updates…';
+  document.getElementById('update-status-sub').textContent='—';
+  return api('/update-check').then(info=>{ renderUpdateStatus(info); return info; })
+    .catch(e=>{ renderUpdateStatus({ok:false,error:e.message}); });
+}
+
+function resetUpdateSteps(){ document.querySelectorAll('#update-overlay .ri-step').forEach(s=>s.classList.remove('active','done','error','waiting')); }
+function setUpdActive(s){ const e=document.querySelector('#update-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('done','error','waiting'); e.classList.add('active'); }
+function setUpdDone(s){ const e=document.querySelector('#update-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('active','error','waiting'); e.classList.add('done'); }
+function setUpdErr(s){ const e=document.querySelector('#update-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('active','done','waiting'); e.classList.add('error'); }
+const UPD_ORDER=['checking','pulling','installing_deps','restarting','done'];
+const UPD_MSGS={
+  checking:'Checking GitHub for the latest version…',
+  pulling:'Downloading the update…',
+  installing_deps:'Installing dependencies…',
+  restarting:'Restarting the panel — this page will briefly disconnect…',
+};
+function applyUpdateProgress(p){
+  if(!p) return;
+  const s=p.step||'';
+  if(s==='error'){
+    setUpdErr('checking');
+    document.getElementById('upd-title').textContent='Update Failed';
+    document.getElementById('upd-msg').textContent=String(p.error||'An error occurred.');
+    document.getElementById('upd-icon').classList.add('error');
+    document.getElementById('update-close').style.display='';
+    toast('Update failed',String(p.error||'An error occurred.'),'err');
+    return;
+  }
+  const idx=UPD_ORDER.indexOf(s);
+  if(idx===-1) return;
+  for(let i=0;i<idx;i++) setUpdDone(UPD_ORDER[i]);
+  setUpdActive(s);
+  if(s!=='done') document.getElementById('upd-msg').textContent=UPD_MSGS[s]||'Working…';
+  if(s==='done'){
+    UPD_ORDER.forEach(setUpdDone);
+    document.getElementById('upd-title').textContent='Update Complete';
+    document.getElementById('upd-msg').textContent='The panel has been updated. Refresh to load the new version.';
+    document.getElementById('upd-icon').classList.add('done');
+    document.getElementById('upd-icon-download').style.display='none';
+    document.getElementById('upd-icon-check').style.display='';
+    document.getElementById('update-refresh-now').style.display='';
+    document.getElementById('update-close').style.display='';
+    toast('Update complete','Refresh to load the new version','ok',[{label:'Refresh now',onClick:()=>location.reload()}],15000);
+  }
+}
+function openUpdateOverlay(){
+  const o=document.getElementById('update-overlay');
+  resetUpdateSteps();
+  document.getElementById('upd-title').textContent='Updating Panel…';
+  document.getElementById('upd-msg').textContent='This may take a moment…';
+  document.getElementById('upd-icon').classList.remove('done','error');
+  document.getElementById('upd-icon-download').style.display='';
+  document.getElementById('upd-icon-check').style.display='none';
+  document.getElementById('update-refresh-now').style.display='none';
+  document.getElementById('update-close').style.display='none';
+  o.classList.add('show');
+}
+let updatePollTimer=null;
+function pollUpdateStatus(){
+  if(updatePollTimer) clearInterval(updatePollTimer);
+  let misses=0;
+  const MAX_MISSES=90; // tolerate ~90s of the panel being unreachable while it restarts
+  updatePollTimer=setInterval(()=>{
+    api('/update-status').then(p=>{
+      misses=0;
+      applyUpdateProgress(p);
+      if(p.step==='done'||p.step==='error'){ clearInterval(updatePollTimer); updatePollTimer=null; }
+    }).catch(()=>{
+      misses++;
+      if(misses>MAX_MISSES){
+        clearInterval(updatePollTimer); updatePollTimer=null;
+        document.getElementById('upd-title').textContent='Still restarting…';
+        document.getElementById('upd-msg').textContent='The panel is taking longer than expected. Try refreshing manually.';
+        document.getElementById('update-close').style.display='';
+        document.getElementById('update-refresh-now').style.display='';
+      }
+    });
+  },1000);
+}
+function resumeUpdateIfInProgress(){
+  return api('/update-status').then(p=>{
+    if(p&&['checking','pulling','installing_deps','restarting'].includes(p.step)){
+      openUpdateOverlay();
+      applyUpdateProgress(p);
+      pollUpdateStatus();
+    } else {
+      checkForUpdates();
+    }
+  }).catch(()=>{ checkForUpdates(); });
+}
+document.getElementById('btn-update-check').addEventListener('click',checkForUpdates);
+document.getElementById('btn-update-install').addEventListener('click',()=>{
+  const btn=document.getElementById('btn-update-install');
+  btn.disabled=true;
+  api('/update-install',{method:'POST'}).then(()=>{
+    closeUpdateDrawer();
+    openUpdateOverlay();
+    pollUpdateStatus();
+  }).catch(e=>{
+    btn.disabled=false;
+    toast('Error',e.message||'Could not start update','err');
+  });
+});
+document.getElementById('update-refresh-now').addEventListener('click',()=>location.reload());
+document.getElementById('update-close').addEventListener('click',()=>document.getElementById('update-overlay').classList.remove('show'));
+
+document.addEventListener('DOMContentLoaded',()=>{ attachSteppers(); loadSettings(); refreshStatus(); refreshPlayers(); loadBackups(); resumeUpdateIfInProgress(); setInterval(()=>{ refreshStatus(); refreshPlayers(); },4000); });
 </script>
 {% endblock %}

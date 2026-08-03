@@ -359,12 +359,21 @@
   /* ---- reinstall / restore / update overlays ---- */
   #reinstall-overlay, #restore-overlay, #update-overlay {
     position:fixed; inset:0; z-index:10000;
-    background: color-mix(in oklab, var(--bg) 82%, transparent);
-    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
     display:none; align-items:center; justify-content:center; flex-direction:column;
   }
+  /* blur is expensive to keep compositing behind a continuously-animating card — skip it for the update overlay */
+  #reinstall-overlay, #restore-overlay {
+    background: color-mix(in oklab, var(--bg) 82%, transparent);
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+  }
+  #update-overlay { background: color-mix(in oklab, var(--bg) 90%, transparent); }
   #reinstall-overlay.show, #restore-overlay.show, #update-overlay.show { display:flex; animation:ri-bg-in .3s ease both; }
   #rst-icon { background:var(--accent-soft); border-color:color-mix(in oklab,var(--accent) 30%,transparent); color:var(--accent); }
+  #upd-icon.error { background:var(--danger-soft); border-color:color-mix(in oklab,var(--danger) 30%,transparent); color:var(--danger); animation:ri-pop .3s ease-out both; }
+  #update-overlay .ri-card { width:min(380px,92vw); gap:20px; }
+  .upd-progress { width:100%; height:6px; border-radius:999px; background:var(--bg-soft); border:1px solid var(--border); overflow:hidden; }
+  .upd-progress-bar { height:100%; width:4%; border-radius:999px; background:var(--accent); transition:width .5s cubic-bezier(.4,0,.2,1), background .25s ease; }
+  .upd-progress-bar.error { background:var(--danger); }
   #rst-icon.done  { background:var(--accent-soft); border-color:color-mix(in oklab,var(--accent) 30%,transparent); color:var(--accent); animation:ri-pop .3s ease-out both; }
   #rst-icon.error { background:var(--danger-soft); border-color:color-mix(in oklab,var(--danger) 30%,transparent); color:var(--danger); animation:ri-pop .3s ease-out both; }
   .ri-step-ico .ri-err { display:none; }
@@ -994,30 +1003,10 @@
     <div class="ri-icon-wrap" id="upd-icon">
       <svg id="upd-icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       <svg id="upd-icon-check" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <svg id="upd-icon-error" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </div>
     <h2 class="ri-title" id="upd-title">Updating Panel…</h2>
-    <div class="ri-steps">
-      <div class="ri-step" data-step="checking">
-        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
-        <span>Checking GitHub for updates</span>
-      </div>
-      <div class="ri-step" data-step="pulling">
-        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
-        <span>Downloading update</span>
-      </div>
-      <div class="ri-step" data-step="installing_deps">
-        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
-        <span>Installing dependencies</span>
-      </div>
-      <div class="ri-step" data-step="restarting">
-        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
-        <span>Restarting panel</span>
-      </div>
-      <div class="ri-step" data-step="done">
-        <span class="ri-step-ico"><span class="ri-idle"></span><span class="ri-spin"></span><svg class="ri-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg><svg class="ri-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="ri-dash">—</span></span>
-        <span>Back online</span>
-      </div>
-    </div>
+    <div class="upd-progress"><div class="upd-progress-bar" id="upd-progress-bar"></div></div>
     <div class="ri-msg" id="upd-msg">This may take a moment…</div>
     <button id="update-refresh-now" class="btn btn-primary" style="display:none">Refresh Now</button>
     <button id="update-close" class="btn btn-secondary" style="display:none">Close</button>
@@ -2036,41 +2025,51 @@ function checkForUpdates(){
     .catch(e=>{ renderUpdateStatus({ok:false,error:e.message}); });
 }
 
-function resetUpdateSteps(){ document.querySelectorAll('#update-overlay .ri-step').forEach(s=>s.classList.remove('active','done','error','waiting')); }
-function setUpdActive(s){ const e=document.querySelector('#update-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('done','error','waiting'); e.classList.add('active'); }
-function setUpdDone(s){ const e=document.querySelector('#update-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('active','error','waiting'); e.classList.add('done'); }
-function setUpdErr(s){ const e=document.querySelector('#update-overlay .ri-step[data-step="'+s+'"]'); if(!e)return; e.classList.remove('active','done','waiting'); e.classList.add('error'); }
 const UPD_ORDER=['checking','pulling','installing_deps','restarting','done'];
+const UPD_PERCENT={checking:12,pulling:45,installing_deps:72,restarting:90,done:100};
 const UPD_MSGS={
   checking:'Checking GitHub for the latest version…',
   pulling:'Downloading the update…',
   installing_deps:'Installing dependencies…',
   restarting:'Restarting the panel — this page will briefly disconnect…',
 };
+let _lastUpdStep=null;
+function setUpdProgress(pct,isError){
+  const bar=document.getElementById('upd-progress-bar');
+  bar.style.width=pct+'%';
+  bar.classList.toggle('error',!!isError);
+}
+function swapUpdIcon(which){
+  document.getElementById('upd-icon-download').style.display=which==='download'?'':'none';
+  document.getElementById('upd-icon-check').style.display=which==='check'?'':'none';
+  document.getElementById('upd-icon-error').style.display=which==='error'?'':'none';
+}
 function applyUpdateProgress(p){
   if(!p) return;
   const s=p.step||'';
   if(s==='error'){
-    setUpdErr('checking');
+    if(_lastUpdStep==='error') return; // already rendered — nothing changed since the last poll tick
+    _lastUpdStep='error';
+    setUpdProgress(100,true);
+    swapUpdIcon('error');
+    document.getElementById('upd-icon').classList.add('error');
     document.getElementById('upd-title').textContent='Update Failed';
     document.getElementById('upd-msg').textContent=String(p.error||'An error occurred.');
-    document.getElementById('upd-icon').classList.add('error');
     document.getElementById('update-close').style.display='';
     toast('Update failed',String(p.error||'An error occurred.'),'err');
     return;
   }
-  const idx=UPD_ORDER.indexOf(s);
-  if(idx===-1) return;
-  for(let i=0;i<idx;i++) setUpdDone(UPD_ORDER[i]);
-  setUpdActive(s);
+  if(s===_lastUpdStep) return; // no change — skip redundant DOM writes on every poll tick
+  _lastUpdStep=s;
+  const pct=UPD_PERCENT[s];
+  if(pct===undefined) return;
+  setUpdProgress(pct,false);
   if(s!=='done') document.getElementById('upd-msg').textContent=UPD_MSGS[s]||'Working…';
   if(s==='done'){
-    UPD_ORDER.forEach(setUpdDone);
     document.getElementById('upd-title').textContent='Update Complete';
     document.getElementById('upd-msg').textContent='The panel has been updated. Refresh to load the new version.';
     document.getElementById('upd-icon').classList.add('done');
-    document.getElementById('upd-icon-download').style.display='none';
-    document.getElementById('upd-icon-check').style.display='';
+    swapUpdIcon('check');
     document.getElementById('update-refresh-now').style.display='';
     document.getElementById('update-close').style.display='';
     toast('Update complete','Refresh to load the new version','ok',[{label:'Refresh now',onClick:()=>location.reload()}],15000);
@@ -2078,12 +2077,12 @@ function applyUpdateProgress(p){
 }
 function openUpdateOverlay(){
   const o=document.getElementById('update-overlay');
-  resetUpdateSteps();
+  _lastUpdStep=null;
   document.getElementById('upd-title').textContent='Updating Panel…';
   document.getElementById('upd-msg').textContent='This may take a moment…';
   document.getElementById('upd-icon').classList.remove('done','error');
-  document.getElementById('upd-icon-download').style.display='';
-  document.getElementById('upd-icon-check').style.display='none';
+  swapUpdIcon('download');
+  setUpdProgress(4,false);
   document.getElementById('update-refresh-now').style.display='none';
   document.getElementById('update-close').style.display='none';
   o.classList.add('show');

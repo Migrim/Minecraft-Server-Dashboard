@@ -2066,7 +2066,7 @@ function applyUpdateProgress(p){
     document.getElementById('upd-icon').classList.add('done');
     swapUpdIcon('check');
     document.getElementById('update-refresh-now').style.display='';
-    document.getElementById('update-close').style.display='';
+    document.getElementById('update-close').style.display='none';
     toast('Update complete','Refresh to load the new version','ok',[{label:'Refresh now',onClick:()=>location.reload()}],15000);
   }
 }

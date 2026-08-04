@@ -281,12 +281,17 @@
   .info-key { font-size:11.5px; color:var(--text-3); font-weight:500; text-transform:uppercase; letter-spacing:.05em; }
   .info-val { font-size:13px; color:var(--text); font-weight:500; word-break:break-all; }
   .info-val.mono { font-family:'JetBrains Mono',ui-monospace,monospace; font-size:12px; }
-  .info-val .copy-icon {
+  .copy-icon {
     margin-left:8px; cursor:pointer; color:var(--text-3); opacity:0;
-    transition:opacity .15s,color .15s; font-size:12px;
+    transition:opacity .15s,color .15s; flex:0 0 auto;
+    display:inline-flex; align-items:center; justify-content:center;
+    vertical-align:middle;
   }
+  .copy-icon svg { width:13px; height:13px; }
   .info-row:hover .copy-icon { opacity:1; }
-  .info-val .copy-icon:hover { color:var(--accent); }
+  .copy-icon:hover { color:var(--accent); }
+  .info-val-wrap { display:flex; align-items:center; min-width:0; }
+  .info-val-wrap .info-val { flex:1 1 auto; min-width:0; }
   .toggle-true { display:inline-flex; align-items:center; gap:6px; color:var(--accent); }
   .toggle-true::before { content:""; width:6px; height:6px; border-radius:99px; background:currentColor; }
 
@@ -561,7 +566,12 @@
         <div class="card-body">
           <div class="info-row">
             <span class="info-key">MOTD</span>
-            <span class="info-val" id="info-motd">—</span>
+            <span class="info-val-wrap">
+              <span class="info-val" id="info-motd">—</span>
+              <span class="copy-icon" id="info-motd-copy" title="Copy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </span>
+            </span>
           </div>
           <div class="info-row">
             <span class="info-key">Version</span>
@@ -577,11 +587,11 @@
           </div>
           <div class="info-row">
             <span class="info-key">Public IP</span>
-            <span class="info-val mono" id="info-public">—<span class="copy-icon" title="Copy">⧉</span></span>
+            <span class="info-val mono" id="info-public">—</span>
           </div>
           <div class="info-row">
             <span class="info-key">Local IP</span>
-            <span class="info-val mono" id="info-local">—<span class="copy-icon" title="Copy">⧉</span></span>
+            <span class="info-val mono" id="info-local">—</span>
           </div>
           <div class="info-row">
             <span class="info-key">Port</span>
@@ -637,6 +647,12 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ---- helpers ---- */
+  const COPY_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  function copyToClipboard(text) {
+    navigator.clipboard?.writeText(text)
+      .then(() => toast('Copied', text, 'ok', null, 2000))
+      .catch(() => toast('Copy Failed', 'Could not copy to clipboard', 'err'));
+  }
   function humanBytes(n) {
     if (typeof n !== 'number' || !isFinite(n)) return '—';
     const u = ['B','KB','MB','GB','TB']; let i = 0;
@@ -1406,16 +1422,39 @@ document.addEventListener('DOMContentLoaded', () => {
     return out.join('').replace(/\n/g, '<br>');
   }
 
+  function stripFormattingCodes(raw) {
+    return String(raw)
+      .replace(/\\u00A7/gi, '§')
+      .replace(/[§&]x([§&][0-9a-fA-F]){6}/g, '')
+      .replace(/[§&]#[0-9a-fA-F]{6}/g, '')
+      .replace(/[§&][0-9a-fk-or]/gi, '')
+      .replace(/\\n/g, ' ')
+      .trim();
+  }
+
   /* ---- server info ---- */
   function fetchServerInfo() {
     fetch('/server-info').then(r => r.json()).then(info => {
-      const set = (el, v) => { if (el) el.textContent = v ?? '—'; };
+      const addCopy = (el, text) => {
+        const icon = document.createElement('span');
+        icon.className = 'copy-icon';
+        icon.title = 'Copy';
+        icon.innerHTML = COPY_ICON_SVG;
+        icon.addEventListener('click', (e) => { e.stopPropagation(); copyToClipboard(text); });
+        el.appendChild(icon);
+      };
+      const set = (el, v) => {
+        if (!el) return;
+        const text = (v === null || v === undefined || v === '') ? '—' : String(v);
+        el.textContent = text;
+        if (text !== '—') addCopy(el, text);
+      };
       set(els.version, info.mc_version || '—');
       set(els.java,    info.java_version || '—');
       set(els.uptime,  info.uptime_human || '—');
       set(els.port,    info.port || '—');
-      if (info.online_mode === true)  els.online.innerHTML = '<span class="toggle-true">true</span>';
-      else if (info.online_mode === false) els.online.textContent = 'false';
+      if (info.online_mode === true) { els.online.innerHTML = '<span class="toggle-true">true</span>'; addCopy(els.online, 'true'); }
+      else if (info.online_mode === false) { els.online.textContent = 'false'; addCopy(els.online, 'false'); }
       else els.online.textContent = '—';
 
       // Mods / Plugins counts
@@ -1433,17 +1472,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Public IP with copy
       const pubEl = els.public; const pubIP = info.public_ip || '—';
-      pubEl.innerHTML = pubIP + (pubIP !== '—' ? ' <span class="copy-icon" title="Copy">⧉</span>' : '');
-      pubEl.querySelector('.copy-icon')?.addEventListener('click', () => navigator.clipboard?.writeText(pubIP));
+      pubEl.innerHTML = pubIP + (pubIP !== '—' ? ` <span class="copy-icon" title="Copy">${COPY_ICON_SVG}</span>` : '');
+      pubEl.querySelector('.copy-icon')?.addEventListener('click', () => copyToClipboard(pubIP));
 
       // Local IP with copy
       const locEl = els.local; const locIP = info.local_ip || '—';
-      locEl.innerHTML = locIP + (locIP !== '—' ? ' <span class="copy-icon" title="Copy">⧉</span>' : '');
-      locEl.querySelector('.copy-icon')?.addEventListener('click', () => navigator.clipboard?.writeText(locIP));
+      locEl.innerHTML = locIP + (locIP !== '—' ? ` <span class="copy-icon" title="Copy">${COPY_ICON_SVG}</span>` : '');
+      locEl.querySelector('.copy-icon')?.addEventListener('click', () => copyToClipboard(locIP));
 
       // MOTD with seamless marquee when too wide to fit
       const motdRaw = info.motd || '—';
       const motdHtml = motdToHtml(motdRaw);
+      const motdCopyBtn = document.getElementById('info-motd-copy');
+      if (motdCopyBtn) {
+        const motdPlain = motdRaw !== '—' ? stripFormattingCodes(motdRaw) : '';
+        motdCopyBtn.style.display = motdPlain ? '' : 'none';
+        motdCopyBtn.onclick = () => copyToClipboard(motdPlain);
+      }
       if (motdHtml !== lastMotdHtml) {
         lastMotdHtml = motdHtml;
         const motdEl = els.motd;
@@ -1470,13 +1515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (info.uptime_human) parts.push('up ' + info.uptime_human);
       if (parts.length) {
         const rawMotd = info.motd || 'server';
-        const plainMotd = String(rawMotd)
-          .replace(/\\u00A7/gi, '§')
-          .replace(/[§&]x([§&][0-9a-fA-F]){6}/g, '')
-          .replace(/[§&]#[0-9a-fA-F]{6}/g, '')
-          .replace(/[§&][0-9a-fk-or]/gi, '')
-          .replace(/\\n/g, ' ')
-          .trim();
+        const plainMotd = stripFormattingCodes(rawMotd);
         const esc = s => s.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const label = plainMotd.length > 30 ? plainMotd.slice(0, 29) + '…' : plainMotd;
         document.getElementById('hero-lede').innerHTML =

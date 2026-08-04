@@ -1,8 +1,6 @@
 {% extends "base_app.html" %}
 {% block title %}Minecraft Server · Dashboard{% endblock %}
 
-{% block brand_sub %}<span class="brand-sub" id="brand-server-name">Dashboard</span>{% endblock %}
-
 {% block head_extra %}
 <style>
   :root { --console-bg:#221b14; --console-fg:#ece2ce; --console-dim:#9b8e74; --console-mute:#7a6f5a; }
@@ -25,9 +23,7 @@
 
   /* ---------- hero ---------- */
   .hero { display:flex; align-items:center; justify-content:space-between; gap:24px; }
-  .hero h1 { margin:0 0 4px; font-size:26px; font-weight:600; letter-spacing:-.02em; }
-  .hero p.lede { margin:0; color:var(--text-3); font-size:13.5px; }
-  .hero p.lede strong { color:var(--text-2); font-weight:600; }
+  .hero h1 { margin:0; font-size:26px; font-weight:600; letter-spacing:-.02em; }
   .hero-actions { display:flex; gap:10px; align-items:center; }
 
   .status-pill {
@@ -404,7 +400,6 @@
     <section class="hero">
       <div>
         <h1>Server overview</h1>
-        <p class="lede" id="hero-lede">Manage your Minecraft server.</p>
       </div>
       <div class="hero-actions">
         <button class="btn btn-primary" id="start-server">
@@ -1507,19 +1502,6 @@ document.addEventListener('DOMContentLoaded', () => {
             motdEl.innerHTML = motdHtml;
           }
         }));
-      }
-
-      // hero lede — strip formatting codes, truncate with ellipsis if too long
-      const parts = [];
-      if (info.mc_version) parts.push(info.mc_version);
-      if (info.uptime_human) parts.push('up ' + info.uptime_human);
-      if (parts.length) {
-        const rawMotd = info.motd || 'server';
-        const plainMotd = stripFormattingCodes(rawMotd);
-        const esc = s => s.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const label = plainMotd.length > 30 ? plainMotd.slice(0, 29) + '…' : plainMotd;
-        document.getElementById('hero-lede').innerHTML =
-          'Running <strong title="' + esc(plainMotd) + '">' + esc(label) + '</strong> · ' + parts.join(' · ');
       }
 
       if (info.max_players) serverMaxPlayers = info.max_players;
